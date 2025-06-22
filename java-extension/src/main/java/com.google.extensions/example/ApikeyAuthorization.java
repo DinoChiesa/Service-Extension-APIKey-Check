@@ -23,6 +23,7 @@ import io.envoyproxy.envoy.service.ext_proc.v3.HttpHeaders;
 import io.envoyproxy.envoy.service.ext_proc.v3.ProcessingResponse;
 import io.envoyproxy.envoy.type.v3.HttpStatus;
 import io.envoyproxy.envoy.type.v3.StatusCode;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,23 +104,25 @@ public class ApikeyAuthorization extends ServiceCallout {
                     logger.warn("Authorization header format is invalid.");
                     return null;
                   }
-                });
+                })
+            .orElse(null);
 
     if (apikey == null) {
       return ApikeyStatus.MissingApiKey;
     }
 
-    // AI! Check here if the apikey is present in APIKEYS. If it is,
-    // return ApikeyStatus.ValidApiKey.  Else, return ApikeyStatus.InvalidApiKey;
-
+    if (APIKEYS.contains(apikey)) {
+      return ApikeyStatus.ValidApiKey;
+    } else {
+      return ApikeyStatus.InvalidApiKey;
+    }
   }
 
   /**
    * Handles request headers .
    *
-   * <p>This method sets up a response that includes the status code 301 (Moved Permanently) and the
-   * "Location" header with a value of "http://service-extensions.com/redirect", signaling the
-   * client to redirect to this URL.
+   * <p>This method checks for a valid API key. If the key is valid, the request is allowed to
+   * proceed. If the key is missing or invalid, an immediate `401 Unauthorized` response is sent.
    *
    * @param processingResponseBuilder the {@link ProcessingResponse.Builder} used to construct the
    *     immediate response.
@@ -130,22 +133,27 @@ public class ApikeyAuthorization extends ServiceCallout {
   public void onRequestHeaders(
       ProcessingResponse.Builder processingResponseBuilder, HttpHeaders headers) {
 
-    verifyApiKey(headers);
+    ApikeyStatus apikeyStatus = verifyApiKey(headers);
 
-    // Define redirect headers using ImmutableMap
-    ImmutableMap<String, String> redirectHeaders =
-        ImmutableMap.of("Location", "http://service-extensions.com/redirect");
+    if (apikeyStatus.isValid()) {
+      // API key is valid, do nothing and let the request proceed.
+      logger.info("Valid API key, request allowed.");
+      return;
+    }
 
-    // Prepare the status for 301 redirect
-    HttpStatus status = HttpStatus.newBuilder().setCode(StatusCode.forNumber(301)).build();
+    // API key is invalid or missing, send an immediate error response.
+    logger.warn("API key check failed: {}", apikeyStatus.getMessage());
 
-    // Modify the ImmediateResponse.Builder directly using the updated method
+    // Prepare the status for 401 Unauthorized
+    HttpStatus status = HttpStatus.newBuilder().setCode(StatusCode.Unauthorized).build();
+
+    // Modify the ImmediateResponse.Builder to send a 401 response
     ServiceCalloutTools.buildImmediateResponse(
         processingResponseBuilder.getImmediateResponseBuilder(),
         status,
-        redirectHeaders,
-        null, // No headers to remove in this case
-        null // No body for the response
+        null, // No headers to add
+        null, // No headers to remove
+        apikeyStatus.getMessage() // Body with the error message
         );
   }
 
