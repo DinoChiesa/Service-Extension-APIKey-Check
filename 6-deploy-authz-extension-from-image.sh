@@ -13,7 +13,7 @@ gcloud run deploy "${CLOUDRUN_AUTHZ_SERVICE_NAME}" \
   --region "${CLOUDRUN_SERVICE_REGION}" \
   --cpu 1 \
   --memory '512Mi' \
-  --min-instances 0 \
+  --min-instances 1 \
   --max-instances 1 \
   --no-invoker-iam-check \
   --use-http2 \

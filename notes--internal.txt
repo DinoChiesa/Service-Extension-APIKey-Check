@@ -1,14 +1,3 @@
-Sunday, 22 June 2025, 14:54
-
-2025 June 22: This is now working
-
-
-Trying to build a Service Extension in dotnet
-for ALB.
-
-Following ths medium article
-https://medium.com/google-cloud/serverless-application-authorization-using-google-cloud-load-balancer-service-extensions-39ca3d1ad84a
-
 It's a little fiddly. Many steps.
 
 My idea is
@@ -20,7 +9,6 @@ My idea is
 - profit
 
 2025 June 22: This is now working
-
 
 Both the basic app, and the authz extension, need --no-invoker-iam-check .
 The security is provided by the load balancer.
@@ -43,3 +31,8 @@ While an un-known API key fails as expected.
  curl -i -H "Authorization: APIKEY 0b919f1d-e113-4d08-976c-a2e2d73f412" https://34.117.1.57.nip.io/status
 
 
+====================================================================
+
+To set it up
+
+Just set the environment variables in 
