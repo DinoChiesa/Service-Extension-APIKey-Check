@@ -2,7 +2,7 @@ package utils;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URL;
+import java.net.URI;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 import java.util.logging.Level;
@@ -54,7 +54,9 @@ public class JarUtils {
       return null;
     }
     String manifestPath = classPath.replace("utils/JarUtils.class", "META-INF/MANIFEST.MF");
-    try (InputStream input = new URL(manifestPath).openStream()) {
+
+    try (InputStream input =
+        URI.create(manifestPath).toURL().openStream() /*new URL().openStream()*/) {
       Manifest manifest = new Manifest(input);
       return manifest;
     } catch (IOException e1) {
