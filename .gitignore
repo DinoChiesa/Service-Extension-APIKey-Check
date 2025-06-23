@@ -1,0 +1,12 @@
+.aider*
+
+**/node_modules
+**/target
+
+**/*.*~
+**/*~
+
+**/#*.*#
+**/#*#
+
+**/NOT-USED

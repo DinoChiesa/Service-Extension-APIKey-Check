@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.google.examples</groupId>
+    <artifactId>service-extension-authz</artifactId>
+    <version>20250622</version>
+
+    <properties>
+      <target.for.java>21</target.for.java>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+      <!-- Dependency Versions -->
+      <grpc.version>1.73.0</grpc.version>
+      <!--
+      <proto-google-common-protos.version>2.25.1</proto-google-common-protos.version>
+      -->
+      <truth-proto-extension.version>1.4.4</truth-proto-extension.version>
+      <proto-google-common-protos.version>2.58.2</proto-google-common-protos.version>       <!-- 2.25.1 -->
+      <io.envoyproxy.controlplane.version>1.0.49</io.envoyproxy.controlplane.version>
+      <junit.version>4.13.2</junit.version>
+      <gcp-project-name>${env.REPOSITORY_PROJECT}</gcp-project-name>
+    </properties>
+
+    <dependencies>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-netty-shaded</artifactId>
+        <version>${grpc.version}</version>
+        <scope>runtime</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-netty</artifactId>
+        <version>${grpc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-protobuf</artifactId>
+        <version>${grpc.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-stub</artifactId>
+        <version>${grpc.version}</version>
+      </dependency>
+      <dependency> <!-- necessary for Java 9+ -->
+        <groupId>org.apache.tomcat</groupId>
+        <artifactId>annotations-api</artifactId>
+        <version>6.0.53</version>
+        <scope>provided</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.api.grpc</groupId>
+        <artifactId>proto-google-common-protos</artifactId>
+        <version>${proto-google-common-protos.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.envoyproxy.controlplane</groupId>
+        <artifactId>server</artifactId>
+        <version>${io.envoyproxy.controlplane.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>junit</groupId>
+        <artifactId>junit</artifactId>
+        <version>${junit.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.truth</groupId>
+        <artifactId>truth</artifactId>
+        <version>1.4.4</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>com.google.truth.extensions</groupId>
+        <artifactId>truth-proto-extension</artifactId>
+        <version>${truth-proto-extension.version}</version>
+        <scope>test</scope>
+      </dependency>
+
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-api</artifactId>
+        <version>1.7.36</version>
+      </dependency>
+      <dependency>
+        <groupId>org.slf4j</groupId>
+        <artifactId>slf4j-simple</artifactId>
+        <version>1.7.36</version>
+        <scope>runtime</scope>
+      </dependency>
+      <!-- JUnit 5 -->
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-api</artifactId>
+        <version>5.8.1</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.junit.jupiter</groupId>
+        <artifactId>junit-jupiter-engine</artifactId>
+        <version>5.8.1</version>
+        <scope>test</scope>
+      </dependency>
+      <dependency>
+        <groupId>org.mockito</groupId>
+        <artifactId>mockito-core</artifactId>
+        <version>3.12.4</version>
+        <scope>test</scope>
+      </dependency>
+    </dependencies>
+
+    <build>
+      <extensions>
+        <extension>
+          <groupId>kr.motd.maven</groupId>
+          <artifactId>os-maven-plugin</artifactId>
+          <version>1.7.1</version>
+        </extension>
+      </extensions>
+      <plugins>
+
+      <plugin>
+
+      <!--
+          This plugin gets used with `mvn clean package jib:build` . You MUST
+          run the package goal first.
+
+          With no cloudbuild.yaml, during `gcloud run deploy`, the build will be
+          performed by Cloud Build via the skaffold pack builder, which does not
+          use the jib-maven-plugin.
+
+          But if you want to just build via maven and push an image to a Container
+          Registry repo, `PROJECT_ID=my-gcp-project mvn compile jib:build`
+          will do it.
+       -->
+        <groupId>com.google.cloud.tools</groupId>
+        <artifactId>jib-maven-plugin</artifactId>
+        <version>3.4.6</version>
+        <configuration>
+          <containerizingMode>packaged</containerizingMode>
+          <to>
+            <!--
+                The jib plugin will push the built image into this specific
+                Artifact Registry repo & path. What follows the colon (the
+                version here) will be a tag.
+            -->
+            <image>gcr.io/${gcp-project-name}/cloud-builds-submit/${project.artifactId}-container:${project.version}</image>
+
+            <!-- Later, can deploy this with:
+
+                 gcloud run deploy SERVICE-NAME -+-image gcr.io/full.url.here -+-platform managed ...
+            -->
+          </to>
+        </configuration>
+      </plugin>
+
+      <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.14.0</version>
+          <configuration>
+            <release>${target.for.java}</release>
+            <compilerArgs>
+              <arg>-Xlint:deprecation</arg>
+              <arg>-Xlint:unchecked</arg>
+            </compilerArgs>
+          </configuration>
+        </plugin>
+
+        <plugin>
+          <groupId>org.xolstice.maven.plugins</groupId>
+          <artifactId>protobuf-maven-plugin</artifactId>
+          <version>0.6.1</version>
+          <configuration>
+            <protocArtifact>com.google.protobuf:protoc:${grpc.version}:exe:${os.detected.classifier}</protocArtifact>
+            <pluginId>grpc-java</pluginId>
+            <pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
+
+            <useArgumentFile>true</useArgumentFile>
+            <checkStaleness>true</checkStaleness>
+            <staleMillis>10000</staleMillis>
+          </configuration>
+          <executions>
+            <execution>
+              <goals>
+                <goal>compile</goal>
+                <goal>compile-custom</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+
+        <!-- Plugin to create an executable JAR -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-shade-plugin</artifactId>
+          <version>3.6.0</version>
+          <executions>
+            <execution>
+              <phase>package</phase>
+              <goals>
+                <goal>shade</goal>
+              </goals>
+              <configuration>
+                <transformers>
+                  <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                    <mainClass>com.google.extensions.example.ApikeyAuthorization</mainClass>
+                  </transformer>
+                </transformers>
+                <filters>
+                  <filter>
+                    <artifact>*:*</artifact>
+                    <excludes>
+                      <exclude>META-INF/LICENSE.txt</exclude>
+                      <exclude>META-INF/*.SF</exclude>
+                      <exclude>META-INF/*.DSA</exclude>
+                      <exclude>META-INF/*.RSA</exclude>
+                    </excludes>
+                  </filter>
+                </filters>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+<!--
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-assembly-plugin</artifactId>
+          <version>3.7.1</version>
+          <configuration>
+            <appendAssemblyId>false</appendAssemblyId>
+            <finalName>${project.build.finalName}-alldeps</finalName>
+            <archive>
+              <manifest>
+                <mainClass>com.google.extensions.example.ApikeyAuthorization</mainClass>
+              </manifest>
+            </archive>
+            <descriptorRefs>
+              <descriptorRef>jar-with-dependencies</descriptorRef>
+            </descriptorRefs>
+          </configuration>
+          <executions>
+            <execution>
+              <id>make-assembly</id>
+              <phase>package</phase>
+              <goals>
+                <goal>single</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+-->
+
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>exec-maven-plugin</artifactId>
+          <version>3.5.1</version>
+        </plugin>
+        <!--
+            <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <configuration>
+            <sourcepath>src/main/java</sourcepath>
+            <dependencySourceIncludes>
+            <dependencySourceInclude>groupId:artifactId:*</dependencySourceInclude>
+            </dependencySourceIncludes>
+            <reportOutputDirectory>${project.build.directory}/docs</reportOutputDirectory>
+            </configuration>
+            <executions>
+            <execution>
+            <id>attach-javadocs</id>
+            <goals>
+            <goal>jar</goal>
+            </goals>
+            </execution>
+            </executions>
+            </plugin>
+        -->
+
+
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-enforcer-plugin</artifactId>
+          <version>3.5.0</version>
+          <executions>
+            <execution>
+              <id>enforce-maven</id>
+              <goals>
+                <goal>enforce</goal>
+              </goals>
+              <configuration>
+                <rules>
+                  <requireMavenVersion>
+                    <version>3.9.0</version>
+                  </requireMavenVersion>
+                </rules>
+              </configuration>
+            </execution>
+          </executions>
+        </plugin>
+
+        <plugin>
+          <groupId>org.codehaus.mojo</groupId>
+          <artifactId>versions-maven-plugin</artifactId>
+          <version>2.18.0</version>
+          <executions>
+            <execution>
+              <phase>compile</phase>
+              <goals>
+                <goal>display-dependency-updates</goal>
+                <goal>display-plugin-updates</goal>
+              </goals>
+            </execution>
+          </executions>
+        </plugin>
+
+      </plugins>
+    </build>
+
+  </project>

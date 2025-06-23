@@ -144,6 +144,9 @@ public class ApikeyAuthorization extends ServiceCallout {
     // API key is invalid or missing, send an immediate error response.
     logger.warn("API key check failed: {}", apikeyStatus.getMessage());
 
+    ImmutableMap<String, String> authnHeaders =
+        ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
+
     // Prepare the status for 401 Unauthorized
     HttpStatus status = HttpStatus.newBuilder().setCode(StatusCode.Unauthorized).build();
 
@@ -151,10 +154,9 @@ public class ApikeyAuthorization extends ServiceCallout {
     ServiceCalloutTools.buildImmediateResponse(
         processingResponseBuilder.getImmediateResponseBuilder(),
         status,
-        null, // No headers to add
+        authnHeaders, // No headers to add
         null, // No headers to remove
-        apikeyStatus.getMessage() // Body with the error message
-        );
+        apikeyStatus.getMessage() + "\n");
   }
 
   /**
@@ -179,10 +181,7 @@ public class ApikeyAuthorization extends ServiceCallout {
    * @throws Exception If an error occurs during server startup or shutdown.
    */
   public static void main(String[] args) throws Exception {
-    // Create a builder for ServiceCallout with custom configuration
     ApikeyAuthorization server = new ApikeyAuthorization.Builder().build();
-
-    // Start the server and block until shutdown
     server.start();
     server.blockUntilShutdown();
   }
