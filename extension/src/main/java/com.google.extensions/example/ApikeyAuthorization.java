@@ -43,7 +43,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
   private static final Logger logger = Logger.getLogger(ApikeyAuthorization.class.getName());
   private static final String ACL_RANGE = "Keys!A2:C102";
-  private static Map<String, List<List<String>>> FIXED_KEYS;
+  private static Map<String, Object> FIXED_KEYS;
 
   static {
     List<List<String>> keyrows =
@@ -51,7 +51,7 @@ public class ApikeyAuthorization extends ServiceCallout {
             List.of(
                 List.of("0b919f1d-e113-4d08-976c-a2e2d73f412c", "/status", "GET"),
                 List.of("44a39dc0-da72-42f3-8d8d-d6d01378fe4b", "/status", "GET"));
-    FIXED_KEYS = ImmutableMap.of("values", keyrows, "loaded", "once");
+    FIXED_KEYS = ImmutableMap.of("values", keyrows, "loaded", "startup");
   }
 
   private boolean verbose = false;
@@ -115,7 +115,6 @@ public class ApikeyAuthorization extends ServiceCallout {
       logger.log(Level.INFO, String.format("fetching %s", uri));
       var fetch = new FetchService();
       var map = fetch.get(uri);
-
       map.put("loaded", Instant.now().toString());
       return map;
     } catch (java.lang.Exception exc1) {
@@ -158,6 +157,7 @@ public class ApikeyAuthorization extends ServiceCallout {
       Object value = entry.getValue();
       System.out.printf("%s => (%s) %s\n", key, value.getClass().toString(), value.toString());
       if (key.equals("values")) {
+        @SuppressWarnings("unchecked")
         List<Object> values = (List<Object>) value;
         IntStream.range(0, values.size())
             .boxed()
@@ -172,12 +172,15 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
+    @SuppressWarnings("unchecked")
     Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
     if (map == null) {
       logger.log(Level.INFO, "Could not load apikeys from cache.");
       return ApikeyStatus.InvalidApiKey;
     }
     // showMap(map);
+    logger.log(Level.INFO, "API keys were loaded at %s.", (String) map.get("loaded"));
+    @SuppressWarnings("unchecked")
     List<List<String>> knownkeys = (List<List<String>>) map.get("values");
     if (knownkeys == null) {
       logger.log(Level.INFO, "No API keys available.");
@@ -194,16 +197,22 @@ public class ApikeyAuthorization extends ServiceCallout {
       return ApikeyStatus.InvalidApiKey;
     }
 
-    String path = getHeader(headers, ":path");
-    String method = getHeader(headers, ":method");
+    String requestedPath = getHeader(headers, ":path");
+    String requested = getHeader(headers, ":method");
     boolean isAuthorized =
         matchingKeyEntries.stream()
             .anyMatch(
                 keyrow -> {
                   if (keyrow.size() >= 3) {
-                    String requiredPath = keyrow.get(1);
-                    String requiredMethod = keyrow.get(2);
-                    return requiredPath.equals(path) && requiredMethod.equals(method);
+                    String allowedPath = keyrow.get(1);
+                    String allowedMethod = keyrow.get(2);
+                    // AI! modify this such that the allowedPath is treated as a
+                    // pattern.  It will look like /segment/* , or /*/* or /*/something .
+                    // Check if  requestedPath matches the pattern.  Probably you will
+                    // want to make a Regex by replacing each * in the pattern with a '[^/]+' ,
+                    // and then perform a Regex check.
+                    return allowedPath.equals(requestedPath)
+                        && allowedMethod.equals(requestedMethod);
                   }
                   return false;
                 });
