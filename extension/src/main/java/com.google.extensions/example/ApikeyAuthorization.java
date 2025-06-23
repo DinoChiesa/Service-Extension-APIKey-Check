@@ -19,6 +19,7 @@ package com.google.extensions.example;
 import com.google.common.collect.ImmutableMap;
 import com.google.extensions.service.ServiceCallout;
 import com.google.extensions.service.ServiceCalloutTools;
+import io.envoyproxy.envoy.config.core.v3.HeaderValue;
 import io.envoyproxy.envoy.service.ext_proc.v3.HttpHeaders;
 import io.envoyproxy.envoy.service.ext_proc.v3.ProcessingResponse;
 import io.envoyproxy.envoy.type.v3.HttpStatus;
@@ -246,17 +247,13 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private static void logHeaders(HttpHeaders headers) {
-    // AI! Convert this into a for loop so that it does not
-    // use the stream().forEach() method.
-    headers.getHeaders().getHeadersList().stream()
-        .forEach(
-            header -> {
-              String val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
-              logger.log(
-                  Level.INFO,
-                  String.format(
-                      "Header: %s = %s", header.getKey(), maybeMaskHeader(header.getKey(), val)));
-            });
+    for (HeaderValue header : headers.getHeaders().getHeadersList()) {
+      String val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
+      logger.log(
+          Level.INFO,
+          String.format(
+              "Header: %s = %s", header.getKey(), maybeMaskHeader(header.getKey(), val)));
+    }
   }
 
   /**
