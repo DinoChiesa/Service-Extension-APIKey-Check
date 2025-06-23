@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import utils.JarUtils;
 
 /**
@@ -151,25 +150,25 @@ public class ApikeyAuthorization extends ServiceCallout {
     return checkProvidedApiKey(requestHeaders, apikey);
   }
 
-  private static void showMap(Map<String, Object> map) {
-    for (Map.Entry<String, Object> entry : map.entrySet()) {
-      String key = entry.getKey();
-      Object value = entry.getValue();
-      System.out.printf("%s => (%s) %s\n", key, value.getClass().toString(), value.toString());
-      if (key.equals("values")) {
-        @SuppressWarnings("unchecked")
-        List<Object> values = (List<Object>) value;
-        IntStream.range(0, values.size())
-            .boxed()
-            .forEach(
-                ix -> {
-                  Object v = values.get(ix);
-                  System.out.printf(
-                      "   %d => (%s) %s\n", ix, v.getClass().toString(), v.toString());
-                });
-      }
-    }
-  }
+  // private static void showMap(Map<String, Object> map) {
+  //   for (Map.Entry<String, Object> entry : map.entrySet()) {
+  //     String key = entry.getKey();
+  //     Object value = entry.getValue();
+  //     System.out.printf("%s => (%s) %s\n", key, value.getClass().toString(), value.toString());
+  //     if (key.equals("values")) {
+  //       @SuppressWarnings("unchecked")
+  //       List<Object> values = (List<Object>) value;
+  //       IntStream.range(0, values.size())
+  //           .boxed()
+  //           .forEach(
+  //               ix -> {
+  //                 Object v = values.get(ix);
+  //                 System.out.printf(
+  //                     "   %d => (%s) %s\n", ix, v.getClass().toString(), v.toString());
+  //               });
+  //     }
+  //   }
+  // }
 
   private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
     @SuppressWarnings("unchecked")
@@ -179,7 +178,8 @@ public class ApikeyAuthorization extends ServiceCallout {
       return ApikeyStatus.InvalidApiKey;
     }
     // showMap(map);
-    logger.log(Level.INFO, "API keys were loaded at %s.", (String) map.get("loaded"));
+    logger.log(
+        Level.INFO, String.format("API keys were loaded at %s.", (String) map.get("loaded")));
     @SuppressWarnings("unchecked")
     List<List<String>> knownkeys = (List<List<String>>) map.get("values");
     if (knownkeys == null) {
@@ -246,6 +246,8 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private static void logHeaders(HttpHeaders headers) {
+    // AI! Convert this into a for loop so that it does not
+    // use the stream().forEach() method.
     headers.getHeaders().getHeadersList().stream()
         .forEach(
             header -> {
