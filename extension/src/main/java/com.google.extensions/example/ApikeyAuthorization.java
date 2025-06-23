@@ -50,7 +50,7 @@ public class ApikeyAuthorization extends ServiceCallout {
             List.of(
                 List.of("0b919f1d-e113-4d08-976c-a2e2d73f412c", "/status", "GET"),
                 List.of("44a39dc0-da72-42f3-8d8d-d6d01378fe4b", "/status", "GET"));
-    FIXED_KEYS = ImmutableMap.of("values", keyrows);
+    FIXED_KEYS = ImmutableMap.of("values", keyrows, "loaded", "once");
   }
 
   private boolean verbose = false;
@@ -81,8 +81,10 @@ public class ApikeyAuthorization extends ServiceCallout {
     private boolean _valid;
     private String _message;
     public static final ApikeyStatus MissingApiKey = new ApikeyStatus(false, "API Key not present");
-    public static final ApikeyStatus InvalidApiKey = new ApikeyStatus(false, "invalid API Key");
-    public static final ApikeyStatus ValidApiKey = new ApikeyStatus(true, "valid API Key");
+    public static final ApikeyStatus InvalidApiKey = new ApikeyStatus(false, "Invalid API Key");
+    public static final ApikeyStatus ValidApiKey = new ApikeyStatus(true, "Valid API Key");
+    public static final ApikeyStatus NoMatchingOperation =
+        new ApikeyStatus(false, "No matching operation found");
 
     public ApikeyStatus(boolean validity, String message) {
       _valid = validity;
@@ -112,6 +114,10 @@ public class ApikeyAuthorization extends ServiceCallout {
       logger.log(Level.INFO, String.format("fetching %s", uri));
       var fetch = new FetchService();
       var map = fetch.get(uri);
+
+      // AI! in place of "timestamp" in the below method, insert an ISO8601-formatted timestamp
+      // corresponding to "now".
+      map.put("loaded", "timestamp");
       return map;
     } catch (java.lang.Exception exc1) {
       logger.log(Level.SEVERE, "Cannot fetch keys.", exc1);
@@ -191,7 +197,6 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     String path = getHeader(headers, ":path");
     String method = getHeader(headers, ":method");
-
     boolean isAuthorized =
         matchingKeyEntries.stream()
             .anyMatch(
@@ -210,10 +215,8 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     logger.log(
         Level.INFO,
-        String.format(
-            "API Key (%s) is valid, but not authorized for path=%s, method=%s",
-            apikey, path, method));
-    return ApikeyStatus.InvalidApiKey;
+        String.format("API Key is valid, but not authorized for path=%s, method=%s", path, method));
+    return ApikeyStatus.NoMatchingOperation;
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
@@ -225,7 +228,6 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private static String maybeMaskHeader(String key, String value) {
-
     // if ("Authorization".equalsIgnoreCase(key)) {
     //   String[] parts = value.split(" ");
     //   if (parts.length >= 2) {
@@ -266,21 +268,20 @@ public class ApikeyAuthorization extends ServiceCallout {
     ApikeyStatus apikeyStatus = verifyApiKey(headers);
 
     if (apikeyStatus.isValid()) {
-      // API key is valid, do nothing and let the request proceed.
       logger.log(Level.INFO, "Valid API key, request allowed.");
       return;
     }
 
-    // API key is invalid or missing, send an immediate error response.
-    logger.log(Level.INFO, String.format("API key check failed: %s", apikeyStatus.getMessage()));
+    logger.log(Level.INFO, String.format("API key check negative: %s", apikeyStatus.getMessage()));
 
-    ImmutableMap<String, String> responseHeadersToAdd =
-        ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
+    StatusCode statusCode = StatusCode.Forbidden;
+    ImmutableMap<String, String> responseHeadersToAdd = null;
+    if (apikeyStatus.equals(ApikeyStatus.MissingApiKey)) {
+      responseHeadersToAdd = ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
+      statusCode = StatusCode.Unauthorized;
+    }
 
-    // Prepare the status for 401 Unauthorized
-    HttpStatus status = HttpStatus.newBuilder().setCode(StatusCode.Unauthorized).build();
-
-    // Modify the ImmediateResponse.Builder to send a 401 response
+    HttpStatus status = HttpStatus.newBuilder().setCode(statusCode).build();
     ServiceCalloutTools.buildImmediateResponse(
         processingResponseBuilder.getImmediateResponseBuilder(),
         status,
