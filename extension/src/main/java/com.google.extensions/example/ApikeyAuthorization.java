@@ -73,7 +73,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     CacheService.getInstance()
         .registerLoader(
-            (key) -> key.endsWith("apikeys"), (_ignoredKey) -> this.loadApikeys(_ignoredKey));
+            (key) -> key.equals("apikeys"), (_ignoredKey) -> this.loadApikeys(_ignoredKey));
   }
 
   static class ApikeyStatus {
@@ -97,21 +97,18 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
   }
 
-  private static boolean isRunningInCloud() {
-    // Google Cloud Run automatically sets the K_SERVICE environment variable.
-    String kService = System.getenv("K_SERVICE");
-    return kService != null && !kService.isEmpty();
-  }
-
   private Object loadApikeys(String _ignoredKey) {
+    logger.log(Level.INFO, "> loadApikeys");
     String SHEET_ID = System.getenv("SHEET_ID");
     if (SHEET_ID == null) {
+      logger.log(Level.INFO, "No SHEET_ID");
       return FIXED_KEYS;
     }
     try {
       String uri =
           String.format(
               "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s", SHEET_ID, ACL_RANGE);
+      logger.log(Level.INFO, String.format("fetching %s", uri));
       var fetch = new FetchService();
       var map = fetch.get(uri);
       return map;
@@ -146,34 +143,69 @@ public class ApikeyAuthorization extends ServiceCallout {
       return ApikeyStatus.MissingApiKey;
     }
 
-    return validateFoundApiKey(requestHeaders, apikey);
+    return checkProvidedApiKey(requestHeaders, apikey);
   }
 
-  private ApikeyStatus validateFoundApiKey(HttpHeaders headers, String apikey) {
-    Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
-    List<List<String>> knownkeys = (List<List<String>>) map.get("values");
-
-    int foundKey =
-        IntStream.range(0, knownkeys.size())
+  private static void showMap(Map<String, Object> map) {
+    for (Map.Entry<String, Object> entry : map.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+      System.out.printf("%s => (%s) %s\n", key, value.getClass().toString(), value.toString());
+      if (key.equals("values")) {
+        List<Object> values = (List<Object>) value;
+        IntStream.range(0, values.size())
             .boxed()
-            .filter(ix -> apikey.equals(knownkeys.get(ix).get(0)))
-            .findFirst()
-            .orElse(-1);
+            .forEach(
+                ix -> {
+                  Object v = values.get(ix);
+                  System.out.printf(
+                      "   %d => (%s) %s\n", ix, v.getClass().toString(), v.toString());
+                });
+      }
+    }
+  }
 
-    if (foundKey < 0) {
+  private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
+    Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
+    if (map == null) {
+      logger.log(Level.INFO, "Could not load apikeys from cache.");
       return ApikeyStatus.InvalidApiKey;
     }
-    List<String> keyrow = knownkeys.get(foundKey);
-    String path = getHeader(headers, ":path");
-    String method = getHeader(headers, ":method");
-
-    if (path != null
-        && path.equals(keyrow.get(1))
-        && method != null
-        && method.equals(keyrow.get(2))) {
-      return ApikeyStatus.ValidApiKey;
+    // showMap(map);
+    List<List<String>> knownkeys = (List<List<String>>) map.get("values");
+    if (knownkeys == null) {
+      logger.log(Level.INFO, "No API keys available.");
+      return ApikeyStatus.InvalidApiKey;
     }
-    return ApikeyStatus.InvalidApiKey;
+
+    List<List<String>> matchingKeyEntries =
+        knownkeys.stream().filter(keyrow -> apikey.equals(keyrow.get(0)));
+
+    if (matchingKeyEntries.size() == 0) {
+      logger.log(Level.INFO, String.format("Did not find that API Key (%s).", apikey));
+      return ApikeyStatus.InvalidApiKey;
+    }
+
+    // AI!  Modify this logic so that it searches through all entries in matchingKeyEntries,
+    // using matchingKeyEntries.stream().
+    //
+    // It should check the path and method for each entry.
+    // If any match, then       return ApikeyStatus.ValidApiKey;
+    // else return ApikeyStatus.InvalidApiKey;
+
+    // TODO: insert key check here
+
+    // List<String> keyrow = knownkeys.get(foundKey);
+    // String path = getHeader(headers, ":path");
+    // String method = getHeader(headers, ":method");
+    //
+    // if (path != null
+    //     && path.equals(keyrow.get(1))
+    //     && method != null
+    //     && method.equals(keyrow.get(2))) {
+    //   return ApikeyStatus.ValidApiKey;
+    // }
+    // return ApikeyStatus.InvalidApiKey;
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
@@ -185,14 +217,15 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private static String maybeMaskHeader(String key, String value) {
-    if ("Authorization".equalsIgnoreCase(key)) {
-      String[] parts = value.split(" ");
-      if (parts.length >= 2) {
-        value = parts[1] + " **********";
-      } else {
-        value = "**********";
-      }
-    }
+
+    // if ("Authorization".equalsIgnoreCase(key)) {
+    //   String[] parts = value.split(" ");
+    //   if (parts.length >= 2) {
+    //     value = parts[0] + " **********";
+    //   } else {
+    //     value = "**********";
+    //   }
+    // }
     return value;
   }
 
@@ -231,7 +264,7 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
 
     // API key is invalid or missing, send an immediate error response.
-    logger.log(Level.INFO, "API key check failed: {}", apikeyStatus.getMessage());
+    logger.log(Level.INFO, String.format("API key check failed: %s", apikeyStatus.getMessage()));
 
     ImmutableMap<String, String> responseHeadersToAdd =
         ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
