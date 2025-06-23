@@ -21,7 +21,8 @@ printf "DNS name: %s\n" "${dnsname}"
 authz_ext_name="authz-extnsn-1"
 authz_policy_name="authz-extnsn-policy-1"
 SAMPLE_FWDRULE_NAME="${SAMPLE_NAME_ROOT}-fwdrule"
-cat >/tmp/authz-policy.yaml <<EOF
+tmpfile=$(mktemp /tmp/authzext-sample.XXXXXX)
+cat >"$tmpfile" <<EOF
 name: ${authz_policy_name}
 target:
   loadBalancingScheme: EXTERNAL_MANAGED
@@ -34,12 +35,13 @@ customProvider:
       - "projects/${CLOUDRUN_PROJECT_ID}/locations/global/authzExtensions/${authz_ext_name}"
 EOF
 
-cat "/tmp/authz-policy.yaml"
+cat "$tmpfile"
 
 printf "\nApplying the authz extension policy...\n"
 gcloud beta network-security authz-policies import "${authz_policy_name}" \
   --project "${CLOUDRUN_PROJECT_ID}" \
-  --source "/tmp/authz-policy.yaml" \
+  --source "$tmpfile" \
   --location "global"
 
+rm "$tmpfile"
 printf "\nOK.\nThe update will take a few moments to become effective...\n\n"

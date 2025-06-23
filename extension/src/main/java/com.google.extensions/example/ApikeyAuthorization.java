@@ -82,9 +82,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
   private ApikeyStatus verifyApiKey(HttpHeaders requestHeaders) {
 
-    requestHeaders
-        .getHeaders()
-        .getHeadersList()
+    requestHeaders.getHeaders().getHeadersList().stream()
         .forEach(
             header -> {
               logger.info("Header: {} = {}", header.getKey(), header.getRawValue());
@@ -101,7 +99,7 @@ public class ApikeyAuthorization extends ServiceCallout {
                   if (parts.length == 2 && "APIKEY".equalsIgnoreCase(parts[0])) {
                     return parts[1];
                   } else {
-                    logger.warn("Authorization header format is invalid.");
+                    logger.info("Authorization header format is invalid.");
                     return null;
                   }
                 })
@@ -115,6 +113,34 @@ public class ApikeyAuthorization extends ServiceCallout {
       return ApikeyStatus.ValidApiKey;
     } else {
       return ApikeyStatus.InvalidApiKey;
+    }
+  }
+
+  private static String getHeader(HttpHeaders headers, String headerName) {
+    return headers.getHeaders().getHeadersList().stream()
+        .filter(header -> headerName.equalsIgnoreCase(header.getKey()))
+        .map(header -> new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8))
+        .findFirst()
+        .orElse(null);
+  }
+
+  private void logHeaders(HttpHeaders headers) {
+    try {
+      logger.info(">>logHeaders");
+      headers.getHeaders().getHeadersList().stream()
+          .forEach(
+              header -> {
+                String val = "-unset-";
+                try {
+                  val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
+                } catch (java.lang.Exception exc1) {
+                  logger.info("Exception getting header value:" + exc1.toString());
+                }
+                logger.info("Header: {} = {}", header.getKey(), val);
+              });
+      logger.info("<<logHeaders");
+    } catch (java.lang.Exception exc1) {
+      logger.info("logHeaders Exception:" + exc1.toString());
     }
   }
 
@@ -132,6 +158,7 @@ public class ApikeyAuthorization extends ServiceCallout {
   @Override
   public void onRequestHeaders(
       ProcessingResponse.Builder processingResponseBuilder, HttpHeaders headers) {
+    logHeaders(headers);
 
     ApikeyStatus apikeyStatus = verifyApiKey(headers);
 
@@ -142,7 +169,7 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
 
     // API key is invalid or missing, send an immediate error response.
-    logger.warn("API key check failed: {}", apikeyStatus.getMessage());
+    logger.info("API key check failed: {}", apikeyStatus.getMessage());
 
     ImmutableMap<String, String> authnHeaders =
         ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
