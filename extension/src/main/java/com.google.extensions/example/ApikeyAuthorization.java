@@ -24,6 +24,7 @@ import io.envoyproxy.envoy.service.ext_proc.v3.ProcessingResponse;
 import io.envoyproxy.envoy.type.v3.HttpStatus;
 import io.envoyproxy.envoy.type.v3.StatusCode;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
@@ -115,9 +116,7 @@ public class ApikeyAuthorization extends ServiceCallout {
       var fetch = new FetchService();
       var map = fetch.get(uri);
 
-      // AI! in place of "timestamp" in the below method, insert an ISO8601-formatted timestamp
-      // corresponding to "now".
-      map.put("loaded", "timestamp");
+      map.put("loaded", Instant.now().toString());
       return map;
     } catch (java.lang.Exception exc1) {
       logger.log(Level.SEVERE, "Cannot fetch keys.", exc1);
