@@ -198,7 +198,7 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
 
     String requestedPath = getHeader(headers, ":path");
-    String requested = getHeader(headers, ":method");
+    String requestedMethod = getHeader(headers, ":method");
     boolean isAuthorized =
         matchingKeyEntries.stream()
             .anyMatch(
@@ -206,12 +206,8 @@ public class ApikeyAuthorization extends ServiceCallout {
                   if (keyrow.size() >= 3) {
                     String allowedPath = keyrow.get(1);
                     String allowedMethod = keyrow.get(2);
-                    // AI! modify this such that the allowedPath is treated as a
-                    // pattern.  It will look like /segment/* , or /*/* or /*/something .
-                    // Check if  requestedPath matches the pattern.  Probably you will
-                    // want to make a Regex by replacing each * in the pattern with a '[^/]+' ,
-                    // and then perform a Regex check.
-                    return allowedPath.equals(requestedPath)
+                    String pathRegex = "^" + allowedPath.replace("*", "[^/]+") + "$";
+                    return requestedPath.matches(pathRegex)
                         && allowedMethod.equals(requestedMethod);
                   }
                   return false;
@@ -223,7 +219,9 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     logger.log(
         Level.INFO,
-        String.format("API Key is valid, but not authorized for path=%s, method=%s", path, method));
+        String.format(
+            "API Key is valid, but not authorized for path=%s, method=%s",
+            requestedPath, requestedMethod));
     return ApikeyStatus.NoMatchingOperation;
   }
 
