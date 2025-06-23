@@ -66,7 +66,14 @@ const serviceAccount = await (async function () {
 function unhandledRequest(_req, response, _next) {
   response
     .status(400)
-    .json({ error: "unhandled request", message: "try GET/POST/PUT" })
+    .header("Content-Type", "application/json")
+    .send(
+      JSON.stringify(
+        { error: "unhandled request", message: "try GET/POST/PUT" },
+        null,
+        2,
+      ) + "\n",
+    )
     .end();
 }
 
@@ -109,6 +116,7 @@ function statusRequestHandler(request, response, next) {
 
 // Register the handlers
 app.get("/status", statusRequestHandler);
+app.get("/status/:any", statusRequestHandler);
 app.get("/", statusRequestHandler);
 app.use(unhandledRequest);
 

@@ -31,7 +31,8 @@ public class CacheService {
   private final LoadingCache<String, Object> cache;
 
   // Each loader has a test function that looks at the key. If the test
-  // returns true, then that loader is used.
+  // returns true, then that loader is used. First loader with a test that
+  // evaluates to true, wins.
   private final Map<Predicate<String>, Function<String, Object>> loaders = new HashMap<>();
 
   public static CacheService getInstance() {
@@ -46,11 +47,19 @@ public class CacheService {
         key -> {
           Optional<Object> result =
               loaders.entrySet().stream()
+                  // // diagnostics
+                  // .map(
+                  //     entry -> {
+                  //       System.out.printf(
+                  //           "--- CacheLoader: examining loader for key: %s => %s---\n",
+                  //           key, entry.getKey().test(key));
+                  //       return entry;
+                  //     })
                   .filter(entry -> entry.getKey().test(key))
                   .findFirst()
                   .map(
                       entry -> {
-                        System.out.printf("--- CacheLoader: Loading data for key: %s ---\n", key);
+                        System.out.printf("CacheLoader: Loading data for key: %s\n", key);
                         return entry.getValue().apply(key);
                       });
 
@@ -60,11 +69,8 @@ public class CacheService {
     // Build the LoadingCache instance
     this.cache =
         Caffeine.newBuilder()
-            // Evict entries 3 minutes after they were last written (created or updated)
             .expireAfterWrite(3, TimeUnit.MINUTES)
-            // Optionally, set a maximum size
             .maximumSize(500)
-            // Build the cache with the loader defined above
             .build(cacheLoader);
   }
 

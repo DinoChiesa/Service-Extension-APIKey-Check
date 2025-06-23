@@ -16,6 +16,7 @@ printf "\nEnabling APIs...\n"
 # Enable the needed APIs
 gcloud services enable \
   compute.googleapis.com \
+  sheets.googleapis.com \
   run.googleapis.com \
   storage.googleapis.com \
   cloudbuild.googleapis.com \

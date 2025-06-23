@@ -384,7 +384,9 @@ public class ServiceCallout {
 
         @Override
         public void onError(Throwable t) {
-          logger.log(Level.WARNING, "Encountered error in routeChat", t);
+          logger.log(
+              Level.WARNING, String.format("error in ExternalProcessor.process: %s", t.toString()));
+          // logger.log(Level.WARNING, "Encountered error in routeChat", t);
         }
 
         @Override
