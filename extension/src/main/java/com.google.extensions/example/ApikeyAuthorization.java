@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import utils.JarUtils;
 
@@ -179,33 +180,40 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
 
     List<List<String>> matchingKeyEntries =
-        knownkeys.stream().filter(keyrow -> apikey.equals(keyrow.get(0)));
+        knownkeys.stream()
+            .filter(keyrow -> !keyrow.isEmpty() && apikey.equals(keyrow.get(0)))
+            .collect(Collectors.toList());
 
     if (matchingKeyEntries.size() == 0) {
       logger.log(Level.INFO, String.format("Did not find that API Key (%s).", apikey));
       return ApikeyStatus.InvalidApiKey;
     }
 
-    // AI!  Modify this logic so that it searches through all entries in matchingKeyEntries,
-    // using matchingKeyEntries.stream().
-    //
-    // It should check the path and method for each entry.
-    // If any match, then       return ApikeyStatus.ValidApiKey;
-    // else return ApikeyStatus.InvalidApiKey;
+    String path = getHeader(headers, ":path");
+    String method = getHeader(headers, ":method");
 
-    // TODO: insert key check here
+    boolean isAuthorized =
+        matchingKeyEntries.stream()
+            .anyMatch(
+                keyrow -> {
+                  if (keyrow.size() >= 3) {
+                    String requiredPath = keyrow.get(1);
+                    String requiredMethod = keyrow.get(2);
+                    return requiredPath.equals(path) && requiredMethod.equals(method);
+                  }
+                  return false;
+                });
 
-    // List<String> keyrow = knownkeys.get(foundKey);
-    // String path = getHeader(headers, ":path");
-    // String method = getHeader(headers, ":method");
-    //
-    // if (path != null
-    //     && path.equals(keyrow.get(1))
-    //     && method != null
-    //     && method.equals(keyrow.get(2))) {
-    //   return ApikeyStatus.ValidApiKey;
-    // }
-    // return ApikeyStatus.InvalidApiKey;
+    if (isAuthorized) {
+      return ApikeyStatus.ValidApiKey;
+    }
+
+    logger.log(
+        Level.INFO,
+        String.format(
+            "API Key (%s) is valid, but not authorized for path=%s, method=%s",
+            apikey, path, method));
+    return ApikeyStatus.InvalidApiKey;
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
