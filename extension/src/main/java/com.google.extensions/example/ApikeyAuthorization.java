@@ -25,27 +25,35 @@ import io.envoyproxy.envoy.type.v3.HttpStatus;
 import io.envoyproxy.envoy.type.v3.StatusCode;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.stream.IntStream;
+import utils.JarUtils;
 
 /**
  * Example callout server that checks an API Key provided in the Authorization header.
  *
- * <p>This class demonstrates how to handle a request header callout and check for a valid APIkey.
+ * <p>This class demonstrates an authorization extension callout that checks for a valid APIkey in
+ * the request header.
  */
 public class ApikeyAuthorization extends ServiceCallout {
 
-  private static final Logger logger = LoggerFactory.getLogger(ApikeyAuthorization.class);
+  private static final Logger logger = Logger.getLogger(ApikeyAuthorization.class.getName());
+  private static final String ACL_RANGE = "Keys!A2:C102";
+  private static Map<String, List<List<String>>> FIXED_KEYS;
 
-  private static final List<String> APIKEYS =
-      List.of("44a39dc0-da72-42f3-8d8d-d6d01378fe4b", "0b919f1d-e113-4d08-976c-a2e2d73f412c");
-
-  // Constructor that calls the superclass constructor
-  public ApikeyAuthorization(ApikeyAuthorization.Builder builder) {
-    super(builder);
+  static {
+    List<List<String>> keyrows =
+        (List<List<String>>)
+            List.of(
+                List.of("0b919f1d-e113-4d08-976c-a2e2d73f412c", "/status", "GET"),
+                List.of("44a39dc0-da72-42f3-8d8d-d6d01378fe4b", "/status", "GET"));
+    FIXED_KEYS = ImmutableMap.of("values", keyrows);
   }
 
-  // Builder specific to ApikeyAuthorization
+  private boolean verbose = false;
+
   public static class Builder extends ServiceCallout.Builder<ApikeyAuthorization.Builder> {
 
     @Override
@@ -57,6 +65,15 @@ public class ApikeyAuthorization extends ServiceCallout {
     protected ApikeyAuthorization.Builder self() {
       return this;
     }
+  }
+
+  public ApikeyAuthorization(ApikeyAuthorization.Builder builder) {
+    super(builder);
+    verbose = "true".equalsIgnoreCase(System.getenv("VERBOSE"));
+
+    CacheService.getInstance()
+        .registerLoader(
+            (key) -> key.endsWith("apikeys"), (_ignoredKey) -> this.loadApikeys(_ignoredKey));
   }
 
   static class ApikeyStatus {
@@ -80,14 +97,34 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
   }
 
+  private static boolean isRunningInCloud() {
+    // Google Cloud Run automatically sets the K_SERVICE environment variable.
+    String kService = System.getenv("K_SERVICE");
+    return kService != null && !kService.isEmpty();
+  }
+
+  private Object loadApikeys(String _ignoredKey) {
+    String SHEET_ID = System.getenv("SHEET_ID");
+    if (SHEET_ID == null) {
+      return FIXED_KEYS;
+    }
+    try {
+      String uri =
+          String.format(
+              "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s", SHEET_ID, ACL_RANGE);
+      var fetch = new FetchService();
+      var map = fetch.get(uri);
+      return map;
+    } catch (java.lang.Exception exc1) {
+      logger.log(Level.SEVERE, "Cannot fetch keys.", exc1);
+    }
+    return FIXED_KEYS;
+  }
+
   private ApikeyStatus verifyApiKey(HttpHeaders requestHeaders) {
-
-    requestHeaders.getHeaders().getHeadersList().stream()
-        .forEach(
-            header -> {
-              logger.info("Header: {} = {}", header.getKey(), header.getRawValue());
-            });
-
+    if (verbose) {
+      logHeaders(requestHeaders);
+    }
     String apikey =
         requestHeaders.getHeaders().getHeadersList().stream()
             .filter(header -> "Authorization".equalsIgnoreCase(header.getKey()))
@@ -99,7 +136,7 @@ public class ApikeyAuthorization extends ServiceCallout {
                   if (parts.length == 2 && "APIKEY".equalsIgnoreCase(parts[0])) {
                     return parts[1];
                   } else {
-                    logger.info("Authorization header format is invalid.");
+                    logger.log(Level.INFO, "Authorization header format is invalid.");
                     return null;
                   }
                 })
@@ -109,11 +146,34 @@ public class ApikeyAuthorization extends ServiceCallout {
       return ApikeyStatus.MissingApiKey;
     }
 
-    if (APIKEYS.contains(apikey)) {
-      return ApikeyStatus.ValidApiKey;
-    } else {
+    return validateFoundApiKey(requestHeaders, apikey);
+  }
+
+  private ApikeyStatus validateFoundApiKey(HttpHeaders headers, String apikey) {
+    Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
+    List<List<String>> knownkeys = (List<List<String>>) map.get("values");
+
+    int foundKey =
+        IntStream.range(0, knownkeys.size())
+            .boxed()
+            .filter(ix -> apikey.equals(knownkeys.get(ix).get(0)))
+            .findFirst()
+            .orElse(-1);
+
+    if (foundKey < 0) {
       return ApikeyStatus.InvalidApiKey;
     }
+    List<String> keyrow = knownkeys.get(foundKey);
+    String path = getHeader(headers, ":path");
+    String method = getHeader(headers, ":method");
+
+    if (path != null
+        && path.equals(keyrow.get(1))
+        && method != null
+        && method.equals(keyrow.get(2))) {
+      return ApikeyStatus.ValidApiKey;
+    }
+    return ApikeyStatus.InvalidApiKey;
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
@@ -124,24 +184,28 @@ public class ApikeyAuthorization extends ServiceCallout {
         .orElse(null);
   }
 
-  private void logHeaders(HttpHeaders headers) {
-    try {
-      logger.info(">>logHeaders");
-      headers.getHeaders().getHeadersList().stream()
-          .forEach(
-              header -> {
-                String val = "-unset-";
-                try {
-                  val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
-                } catch (java.lang.Exception exc1) {
-                  logger.info("Exception getting header value:" + exc1.toString());
-                }
-                logger.info("Header: {} = {}", header.getKey(), val);
-              });
-      logger.info("<<logHeaders");
-    } catch (java.lang.Exception exc1) {
-      logger.info("logHeaders Exception:" + exc1.toString());
+  private static String maybeMaskHeader(String key, String value) {
+    if ("Authorization".equalsIgnoreCase(key)) {
+      String[] parts = value.split(" ");
+      if (parts.length >= 2) {
+        value = parts[1] + " **********";
+      } else {
+        value = "**********";
+      }
     }
+    return value;
+  }
+
+  private static void logHeaders(HttpHeaders headers) {
+    headers.getHeaders().getHeadersList().stream()
+        .forEach(
+            header -> {
+              String val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
+              logger.log(
+                  Level.INFO,
+                  String.format(
+                      "Header: %s = %s", header.getKey(), maybeMaskHeader(header.getKey(), val)));
+            });
   }
 
   /**
@@ -158,20 +222,18 @@ public class ApikeyAuthorization extends ServiceCallout {
   @Override
   public void onRequestHeaders(
       ProcessingResponse.Builder processingResponseBuilder, HttpHeaders headers) {
-    logHeaders(headers);
-
     ApikeyStatus apikeyStatus = verifyApiKey(headers);
 
     if (apikeyStatus.isValid()) {
       // API key is valid, do nothing and let the request proceed.
-      logger.info("Valid API key, request allowed.");
+      logger.log(Level.INFO, "Valid API key, request allowed.");
       return;
     }
 
     // API key is invalid or missing, send an immediate error response.
-    logger.info("API key check failed: {}", apikeyStatus.getMessage());
+    logger.log(Level.INFO, "API key check failed: {}", apikeyStatus.getMessage());
 
-    ImmutableMap<String, String> authnHeaders =
+    ImmutableMap<String, String> responseHeadersToAdd =
         ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
 
     // Prepare the status for 401 Unauthorized
@@ -181,7 +243,7 @@ public class ApikeyAuthorization extends ServiceCallout {
     ServiceCalloutTools.buildImmediateResponse(
         processingResponseBuilder.getImmediateResponseBuilder(),
         status,
-        authnHeaders, // No headers to add
+        responseHeadersToAdd,
         null, // No headers to remove
         apikeyStatus.getMessage() + "\n");
   }
@@ -209,6 +271,13 @@ public class ApikeyAuthorization extends ServiceCallout {
    */
   public static void main(String[] args) throws Exception {
     ApikeyAuthorization server = new ApikeyAuthorization.Builder().build();
+    var ju = new JarUtils();
+    logger.log(
+        Level.INFO,
+        String.format(
+            "ApiKeyAuthorization version:%s build-time:%s",
+            ju.getAttribute("Project-Version"), ju.getAttribute("Build-Time")));
+
     server.start();
     server.blockUntilShutdown();
   }

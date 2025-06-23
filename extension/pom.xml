@@ -11,20 +11,31 @@
     <properties>
       <target.for.java>21</target.for.java>
       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-
-      <!-- Dependency Versions -->
-      <grpc.version>1.73.0</grpc.version>
+      <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ssXXX</maven.build.timestamp.format>
       <!--
       <proto-google-common-protos.version>2.25.1</proto-google-common-protos.version>
       -->
+    <caffeine.version>3.2.0</caffeine.version>
+    <gson.version>2.13.1</gson.version>
+      <grpc.version>1.73.0</grpc.version>
       <truth-proto-extension.version>1.4.4</truth-proto-extension.version>
-      <proto-google-common-protos.version>2.58.2</proto-google-common-protos.version>       <!-- 2.25.1 -->
+      <proto-google-common-protos.version>2.58.2</proto-google-common-protos.version>
       <io.envoyproxy.controlplane.version>1.0.49</io.envoyproxy.controlplane.version>
       <junit.version>4.13.2</junit.version>
       <gcp-project-name>${env.REPOSITORY_PROJECT}</gcp-project-name>
     </properties>
 
     <dependencies>
+    <dependency>
+      <groupId>com.google.code.gson</groupId>
+      <artifactId>gson</artifactId>
+      <version>${gson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.github.ben-manes.caffeine</groupId>
+      <artifactId>caffeine</artifactId>
+      <version>${caffeine.version}</version>
+    </dependency>
       <dependency>
         <groupId>io.grpc</groupId>
         <artifactId>grpc-netty-shaded</artifactId>
@@ -199,7 +210,26 @@
           </executions>
         </plugin>
 
-        <!-- Plugin to create an executable JAR -->
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
+        <configuration>
+          <archive>
+            <!-- include the pom.xml in the generated jar (this may be the default) -->
+            <addMavenDescriptor>true</addMavenDescriptor>
+            <manifestEntries>
+                <Built-By>${user.name}</Built-By>
+                <Build-Jdk>${java.version}</Build-Jdk>
+                <Build-Time>${maven.build.timestamp}</Build-Time>
+                <Project-Version>${project.version}</Project-Version>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!-- Plugin to create a fat executable JAR from the thin jar-->
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-shade-plugin</artifactId>

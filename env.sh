@@ -5,6 +5,8 @@ export REPOSITORY_PROJECT=my-gcp-repo-project
 
 # Variables you can change if you like
 export CLOUDRUN_SERVICE_REGION=us-west1
+# short name of service account in the cloud run project
+export AUTHZ_SHORT_SA=key-reader-109203
 
 # Not used at the moment
 # export SHEET_ID=1-s1H2vEB9aefDPbdPSRvo4nFnIdNxwxQORbHy8_0Ib8
