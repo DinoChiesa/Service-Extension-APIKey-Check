@@ -19,16 +19,18 @@ package com.google.extensions.example;
 import com.google.common.collect.ImmutableMap;
 import com.google.extensions.service.ServiceCallout;
 import com.google.extensions.service.ServiceCalloutTools;
-import io.envoyproxy.envoy.config.core.v3.HeaderValue;
 import io.envoyproxy.envoy.service.ext_proc.v3.HttpHeaders;
 import io.envoyproxy.envoy.service.ext_proc.v3.ProcessingResponse;
 import io.envoyproxy.envoy.type.v3.HttpStatus;
 import io.envoyproxy.envoy.type.v3.StatusCode;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Level;
+import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import utils.JarUtils;
@@ -52,6 +54,15 @@ public class ApikeyAuthorization extends ServiceCallout {
                 List.of("0b919f1d-e113-4d08-976c-a2e2d73f412c", "/status", "GET"),
                 List.of("44a39dc0-da72-42f3-8d8d-d6d01378fe4b", "/status", "GET"));
     FIXED_KEYS = ImmutableMap.of("values", keyrows, "loaded", "startup");
+
+    try (InputStream is =
+        ApikeyAuthorization.class.getClassLoader().getResourceAsStream("logging.properties")) {
+      if (is != null) {
+        LogManager.getLogManager().readConfiguration(is);
+      }
+    } catch (IOException e) {
+      System.err.println("Could not load logging.properties file: " + e.getMessage());
+    }
   }
 
   private boolean verbose = false;
@@ -119,6 +130,7 @@ public class ApikeyAuthorization extends ServiceCallout {
       return map;
     } catch (java.lang.Exception exc1) {
       logger.log(Level.SEVERE, "Cannot fetch keys.", exc1);
+      exc1.printStackTrace();
     }
     return FIXED_KEYS;
   }
@@ -247,13 +259,14 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private static void logHeaders(HttpHeaders headers) {
-    for (HeaderValue header : headers.getHeaders().getHeadersList()) {
-      String val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
-      logger.log(
-          Level.INFO,
-          String.format(
-              "Header: %s = %s", header.getKey(), maybeMaskHeader(header.getKey(), val)));
-    }
+    headers.getHeaders().getHeadersList().stream()
+        .forEach(
+            header -> {
+              String val = new String(header.getRawValue().toByteArray(), StandardCharsets.UTF_8);
+              logger.info(
+                  String.format(
+                      "Header: %s = %s", header.getKey(), maybeMaskHeader(header.getKey(), val)));
+            });
   }
 
   /**
