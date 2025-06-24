@@ -238,8 +238,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     logger.info(
         String.format(
-            "API Key is valid, but not authorized for path:%s, method:%s",
-            requestedPath, requestedMethod));
+            "API Key is valid, but not authorized for %s %s", requestedMethod, requestedPath));
     return statusBuilder.noMatch();
   }
 

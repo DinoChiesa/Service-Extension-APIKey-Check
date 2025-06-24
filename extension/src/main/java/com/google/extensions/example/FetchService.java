@@ -38,9 +38,6 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class FetchService {
-  public static final int MAX_CERTIFICATES = 4;
-  public static final int MAX_DEVELOPER_APPS = 4;
-  private static final int MAX_API_PRODUCTS_PER_APP = 5;
   private static final Logger logger = Logger.getLogger(FetchService.class.getName());
   private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
   private static final Type mapType = new TypeToken<HashMap<String, Object>>() {}.getType();
