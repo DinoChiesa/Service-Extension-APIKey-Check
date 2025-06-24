@@ -27,7 +27,7 @@ import java.util.function.Predicate;
 
 public class CacheService {
   private static CacheService instance;
-
+  private static final int TTL_MINUTES = 3;
   private final LoadingCache<String, Object> cache;
 
   // Each loader has a test function that looks at the key. If the test
@@ -72,9 +72,13 @@ public class CacheService {
     // Build the LoadingCache instance
     this.cache =
         Caffeine.newBuilder()
-            .expireAfterWrite(3, TimeUnit.MINUTES)
+            .expireAfterWrite(TTL_MINUTES, TimeUnit.MINUTES)
             .maximumSize(500)
             .build(cacheLoader);
+  }
+
+  public static int getTtlMinutes() {
+    return TTL_MINUTES;
   }
 
   public Object get(final String key) {

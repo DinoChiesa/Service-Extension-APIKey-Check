@@ -17,7 +17,6 @@
 package com.google.extensions.example;
 
 public class ApikeyStatus {
-  // private String _message;
   private Result _result = Result.Unset;
   private String _apikey;
 
@@ -32,6 +31,34 @@ public class ApikeyStatus {
   private ApikeyStatus(String apikey, Result result) {
     _apikey = apikey;
     _result = result;
+  }
+
+  public boolean isValid() {
+    return _result == Result.Valid;
+  }
+
+  public boolean isKeyMissing() {
+    return _result == Result.KeyMissing;
+  }
+
+  public boolean isResult(Result result) {
+    return _result == result;
+  }
+
+  public String getMessage() {
+    switch (_result) {
+      case KeyMissing:
+        return "API Key not present";
+      case InvalidNotFound:
+        return "Invalid API Key";
+      case FoundNoMatch:
+        return "No matching operation found";
+      case Valid:
+        return "Valid API Key";
+      case Unset:
+      default:
+        return "No status";
+    }
   }
 
   public static ApikeyStatus.Builder builder() {
@@ -77,34 +104,6 @@ public class ApikeyStatus {
     public ApikeyStatus valid() {
       _result = Result.Valid;
       return this.build();
-    }
-  }
-
-  public boolean isValid() {
-    return _result == Result.Valid;
-  }
-
-  public boolean isKeyMissing() {
-    return _result == Result.KeyMissing;
-  }
-
-  public boolean isResult(Result result) {
-    return _result == result;
-  }
-
-  public String getMessage() {
-    switch (_result) {
-      case KeyMissing:
-        return "API Key not present";
-      case InvalidNotFound:
-        return "Invalid API Key";
-      case FoundNoMatch:
-        return "No matching operation found";
-      case Valid:
-        return "Valid API Key";
-      case Unset:
-      default:
-        return "No status";
     }
   }
 }
