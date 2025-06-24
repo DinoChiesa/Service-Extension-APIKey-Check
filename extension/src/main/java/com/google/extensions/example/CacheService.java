@@ -53,9 +53,7 @@ public class CacheService {
     return instance;
   }
 
-  private CacheService() {
-    // Constructor is now empty.
-  }
+  private CacheService() {}
 
   public Object get(final String key) {
     Optional<LoadingCache<String, Object>> cacheOpt =

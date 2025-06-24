@@ -49,7 +49,6 @@ public class FetchService {
             (key) -> key.endsWith("gcptoken"),
             (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey),
             TOKEN_TTL_MINUTES);
-    // .registerLoader((key) -> key.endsWith("products"), (_ignoredKey) -> this.loadProducts());
   }
 
   public static boolean isRunningInCloud() {
