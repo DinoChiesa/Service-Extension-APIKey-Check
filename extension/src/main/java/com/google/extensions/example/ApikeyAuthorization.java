@@ -49,6 +49,7 @@ public class ApikeyAuthorization extends ServiceCallout {
   private static final String ACL_RANGE = "Keys!A2:C102";
   private static final int APIKEYS_TTL_MINUTES = 2;
   private static Map<String, Object> FIXED_KEYS;
+  private FetchService fetch = FetchService.getInstance();
 
   static {
     List<List<String>> keyrows =
@@ -104,7 +105,6 @@ public class ApikeyAuthorization extends ServiceCallout {
           String.format(
               "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s", SHEET_ID, ACL_RANGE);
       logger.info(String.format("fetching %s", uri));
-      var fetch = FetchService.getInstance();
       var map = fetch.get(uri);
       map.put("loaded", Instant.now().toString());
       return map;
