@@ -17,36 +17,36 @@ package com.google.extensions.example;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.LoadingCache;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Predicate;
-import org.checkerframework.checker.index.qual.NonNegative;
+import java.util.logging.Logger;
 
 public class CacheService {
+  private static final Logger logger = Logger.getLogger(CacheService.class.getName());
   private static CacheService instance;
-  private final LoadingCache<String, Object> cache;
 
-  private static class LoaderConfig {
-    final Function<String, Object> loader;
-    final long durationNanos;
+  // A map of predicates to dedicated cache instances.
+  private final Map<Predicate<String>, LoadingCache<String, Object>> caches = new HashMap<>();
 
-    LoaderConfig(Function<String, Object> loader, long durationInMinutes) {
-      this.loader = loader;
-      this.durationNanos = TimeUnit.MINUTES.toNanos(durationInMinutes);
-    }
-  }
+  // A dedicated thread pool for performing asynchronous cache refreshes.
+  private final ExecutorService refreshExecutor =
+      Executors.newFixedThreadPool(
+          4, // A reasonable number of threads for background tasks
+          new ThreadFactoryBuilder()
+              .setNameFormat("cache-refresh-%d")
+              .setDaemon(true) // Allows the JVM to exit without waiting for these threads
+              .build());
 
-  // Each loader has a test function that looks at the key. If the test
-  // returns true, then that loader is used. First loader with a test that
-  // evaluates to true, wins.
-  private final Map<Predicate<String>, LoaderConfig> loaders = new HashMap<>();
-
-  public static CacheService getInstance() {
+  public static synchronized CacheService getInstance() {
     if (instance == null) {
       instance = new CacheService();
     }
@@ -54,69 +54,53 @@ public class CacheService {
   }
 
   private CacheService() {
-    // When a CacheLoader is used with Caffeine's get method, Caffeine holds a
-    // key-scoped lock, to ensure that only one thread can load or compute the
-    // value for a specific key at a time.
-
-    CacheLoader<String, Object> cacheLoader =
-        key -> {
-          Optional<Object> result =
-              loaders.entrySet().stream()
-                  // // diagnostics
-                  // .map(
-                  //     entry -> {
-                  //       System.out.printf(
-                  //           "--- CacheLoader: examining loader for key: %s => %s---\n",
-                  //           key, entry.getKey().test(key));
-                  //       return entry;
-                  //     })
-                  .filter(entry -> entry.getKey().test(key))
-                  .findFirst()
-                  .map(
-                      entry -> {
-                        System.out.printf("CacheLoader: Loading data for key: %s\n", key);
-                        return entry.getValue().loader.apply(key);
-                      });
-
-          return result.orElse(null);
-        };
-
-    final Expiry<String, Object> expiryPolicy =
-        new Expiry<String, Object>() {
-          @Override
-          public long expireAfterCreate(String key, Object value, long currentTime) {
-            return loaders.entrySet().stream()
-                .filter(entry -> entry.getKey().test(key))
-                .findFirst()
-                .map(entry -> entry.getValue().durationNanos)
-                .orElse(TimeUnit.MINUTES.toNanos(5)); // Default TTL
-          }
-
-          @Override
-          public long expireAfterUpdate(
-              String key, Object value, long currentTime, @NonNegative long currentDuration) {
-            return expireAfterCreate(key, value, currentTime);
-          }
-
-          @Override
-          public long expireAfterRead(
-              String key, Object value, long currentTime, @NonNegative long currentDuration) {
-            return currentDuration; // Do not change expiry on read
-          }
-        };
-
-    this.cache =
-        Caffeine.newBuilder().expireAfter(expiryPolicy).maximumSize(500).build(cacheLoader);
+    // Constructor is now empty.
   }
 
   public Object get(final String key) {
-    return cache.get(key);
+    Optional<LoadingCache<String, Object>> cacheOpt =
+        caches.entrySet().stream()
+            .filter(entry -> entry.getKey().test(key))
+            .map(Map.Entry::getValue)
+            .findFirst();
+
+    if (cacheOpt.isPresent()) {
+      return cacheOpt.get().get(key);
+    }
+
+    logger.warning(String.format("No cache registered for key: %s", key));
+    return null;
   }
 
   public CacheService registerLoader(
-      final Predicate<String> test, final Function<String, Object> loader, final long duration)
+      final Predicate<String> test,
+      final Function<String, Object> loader,
+      final long durationInMinutes)
       throws IllegalStateException {
-    loaders.put(test, new LoaderConfig(loader, duration));
+
+    CacheLoader<String, Object> cacheLoader =
+        new CacheLoader<>() {
+          @Override
+          public Object load(String key) {
+            logger.info(String.format("Synchronously loading data for key: %s", key));
+            return loader.apply(key);
+          }
+
+          @Override
+          public CompletableFuture<Object> reload(String key, Object oldValue) {
+            logger.info(String.format("Asynchronously refreshing data for key: %s", key));
+            return CompletableFuture.supplyAsync(() -> loader.apply(key), refreshExecutor);
+          }
+        };
+
+    LoadingCache<String, Object> newCache =
+        Caffeine.newBuilder()
+            .refreshAfterWrite(durationInMinutes, TimeUnit.MINUTES)
+            .expireAfterWrite(durationInMinutes * 2, TimeUnit.MINUTES)
+            .maximumSize(100) // Each cache is specialized, so a smaller size is fine.
+            .build(cacheLoader);
+
+    caches.put(test, newCache);
     return this;
   }
 }
