@@ -30,7 +30,6 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -91,46 +90,85 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   static class ApikeyStatus {
-    private boolean _valid;
-    private String _message;
-    public static final ApikeyStatus MissingApiKey = new ApikeyStatus(false, "API Key not present");
-    public static final ApikeyStatus InvalidApiKey = new ApikeyStatus(false, "Invalid API Key");
-    public static final ApikeyStatus ValidApiKey = new ApikeyStatus(true, "Valid API Key");
-    public static final ApikeyStatus NoMatchingOperation =
-        new ApikeyStatus(false, "No matching operation found");
+    // private String _message;
+    private Result _result = Result.Unset;
+    private String _apikey;
 
-    public ApikeyStatus(boolean validity, String message) {
-      _valid = validity;
-      _message = message;
+    enum Result {
+      KeyMissing,
+      InvalidNotFound,
+      FoundNoMatch,
+      Valid,
+      Unset
+    };
+
+    public ApikeyStatus keyMissing() {
+      _result = Result.keyMissing;
+      return this;
+    }
+
+    public ApikeyStatus invalid() {
+      _result = Result.InvalidNotFound;
+      return this;
+    }
+
+    public ApikeyStatus noMatch() {
+      _result = Result.FoundNoMatch;
+      return this;
+    }
+
+    public ApikeyStatus valid() {
+      _result = Result.Valid;
+      return this;
+    }
+
+    public static ApikeyStatus forKey(String apikey) {
+      var status = new ApikeyStatus();
+      status._apikey = apikey;
+      return status;
     }
 
     public boolean isValid() {
-      return _valid;
+      return _result == Result.Valid;
+    }
+
+    public boolean isResult(Result result) {
+      return _result == result;
     }
 
     public String getMessage() {
-      return _message;
+      // AI! Implement the logic here to return the correct string, depending on the value of
+      // _result.
+      //
+      // Follow this table:
+      //   KeyMissing: "API Key not present"
+      //   InvalidNotFound: "Invalid API Key"
+      //   FoundNoMatch: "No matching operation found"
+      //   Valid: "Valid API Key"
+      //   Unset: "No status"
+
+      return message;
     }
   }
 
   private Object loadApikeys(String _ignoredKey) {
-    logger.log(Level.INFO, "> loadApikeys");
+    logger.info("> loadApikeys");
     String SHEET_ID = System.getenv("SHEET_ID");
     if (SHEET_ID == null) {
-      logger.log(Level.INFO, "No SHEET_ID");
+      logger.info("No SHEET_ID");
       return FIXED_KEYS;
     }
     try {
       String uri =
           String.format(
               "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s", SHEET_ID, ACL_RANGE);
-      logger.log(Level.INFO, String.format("fetching %s", uri));
+      logger.info(String.format("fetching %s", uri));
       var fetch = new FetchService();
       var map = fetch.get(uri);
       map.put("loaded", Instant.now().toString());
       return map;
     } catch (java.lang.Exception exc1) {
-      logger.log(Level.SEVERE, "Cannot fetch keys.", exc1);
+      logger.severe("Cannot fetch keys.");
       exc1.printStackTrace();
     }
     return FIXED_KEYS;
@@ -151,14 +189,14 @@ public class ApikeyAuthorization extends ServiceCallout {
                   if (parts.length == 2 && "APIKEY".equalsIgnoreCase(parts[0])) {
                     return parts[1];
                   } else {
-                    logger.log(Level.INFO, "Authorization header format is invalid.");
+                    logger.info("Authorization header format is invalid.");
                     return null;
                   }
                 })
             .orElse(null);
 
     if (apikey == null) {
-      return ApikeyStatus.MissingApiKey;
+      return ApikeyStatus.forKey("").missing();
     }
 
     return checkProvidedApiKey(requestHeaders, apikey);
@@ -187,18 +225,18 @@ public class ApikeyAuthorization extends ServiceCallout {
   private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
     @SuppressWarnings("unchecked")
     Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
+    ApikeyStatus status = ApikeyStatus.forKey(apikey);
     if (map == null) {
-      logger.log(Level.INFO, "Could not load apikeys from cache.");
-      return ApikeyStatus.InvalidApiKey;
+      logger.info("Could not load apikeys from cache.");
+      return status.invalid();
     }
     // showMap(map);
-    logger.log(
-        Level.INFO, String.format("API keys were loaded at %s.", (String) map.get("loaded")));
+    logger.info(String.format("API keys were loaded at %s.", (String) map.get("loaded")));
     @SuppressWarnings("unchecked")
     List<List<String>> knownkeys = (List<List<String>>) map.get("values");
     if (knownkeys == null) {
-      logger.log(Level.INFO, "No API keys available.");
-      return ApikeyStatus.InvalidApiKey;
+      logger.info("No API keys available.");
+      return status.invalid();
     }
 
     List<List<String>> matchingKeyEntries =
@@ -207,12 +245,17 @@ public class ApikeyAuthorization extends ServiceCallout {
             .collect(Collectors.toList());
 
     if (matchingKeyEntries.size() == 0) {
-      logger.log(Level.INFO, String.format("Did not find that API Key (%s).", apikey));
-      return ApikeyStatus.InvalidApiKey;
+      logger.info(String.format("Did not find that API Key (%s).", apikey));
+      return status.invalid();
     }
 
     String requestedPath = getHeader(headers, ":path");
     String requestedMethod = getHeader(headers, ":method");
+    if (requestedPath == null || requestedMethod == null) {
+      logger.warning("Cannot find path and/or method");
+      return status.invalid();
+    }
+
     boolean isAuthorized =
         matchingKeyEntries.stream()
             .anyMatch(
@@ -232,15 +275,14 @@ public class ApikeyAuthorization extends ServiceCallout {
                 });
 
     if (isAuthorized) {
-      return ApikeyStatus.ValidApiKey;
+      return status.valid();
     }
 
-    logger.log(
-        Level.INFO,
+    logger.info(
         String.format(
-            "API Key is valid, but not authorized for path=%s, method=%s",
+            "API Key is valid, but not authorized for path:%s, method:%s",
             requestedPath, requestedMethod));
-    return ApikeyStatus.NoMatchingOperation;
+    return status.noMatch();
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
@@ -291,15 +333,15 @@ public class ApikeyAuthorization extends ServiceCallout {
     ApikeyStatus apikeyStatus = verifyApiKey(headers);
 
     if (apikeyStatus.isValid()) {
-      logger.log(Level.INFO, "Valid API key, request allowed.");
+      logger.info("Valid API key, request allowed.");
       return;
     }
 
-    logger.log(Level.INFO, String.format("API key check negative: %s", apikeyStatus.getMessage()));
+    logger.info(String.format("API key check negative: %s", apikeyStatus.getMessage()));
 
     StatusCode statusCode = StatusCode.Forbidden;
     ImmutableMap<String, String> responseHeadersToAdd = null;
-    if (apikeyStatus.equals(ApikeyStatus.MissingApiKey)) {
+    if (apikeyStatus.isResult(ApikeyStatus.Result.Missing)) {
       responseHeadersToAdd = ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
       statusCode = StatusCode.Unauthorized;
     }
@@ -337,8 +379,7 @@ public class ApikeyAuthorization extends ServiceCallout {
   public static void main(String[] args) throws Exception {
     ApikeyAuthorization server = new ApikeyAuthorization.Builder().build();
     var ju = new JarUtils();
-    logger.log(
-        Level.INFO,
+    logger.info(
         String.format(
             "ApiKeyAuthorization version:%s build-time:%s",
             ju.getAttribute("Project-Version"), ju.getAttribute("Build-Time")));
