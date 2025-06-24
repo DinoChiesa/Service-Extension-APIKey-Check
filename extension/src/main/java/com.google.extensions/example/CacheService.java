@@ -43,6 +43,9 @@ public class CacheService {
   }
 
   private CacheService() {
+    // When a CacheLoader is used with Caffeine's get method, Caffeine holds a
+    // key-scoped lock, to ensure that only one thread can load or compute the
+    // value for a specific key at a time.
     CacheLoader<String, Object> cacheLoader =
         key -> {
           Optional<Object> result =
