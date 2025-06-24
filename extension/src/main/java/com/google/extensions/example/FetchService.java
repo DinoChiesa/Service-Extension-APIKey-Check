@@ -34,7 +34,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class FetchService {
@@ -66,7 +65,7 @@ public class FetchService {
    */
   private Object loadGcpAccessToken(String _ignoredKey) {
     if (isRunningInCloud()) {
-      logger.log(Level.INFO, "Running in Cloud Run, fetching token from metadata server...");
+      logger.info("Running in Cloud Run, fetching token from metadata server...");
       String metadataUrl =
           "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token";
       try {
@@ -75,16 +74,18 @@ public class FetchService {
           Map<String, Object> tokenResponse = gson.fromJson(responseBody, mapType);
           if (tokenResponse != null && tokenResponse.containsKey("access_token")) {
             String accessToken = (String) tokenResponse.get("access_token");
-            logger.log(Level.INFO, "Successfully fetched token from metadata server.");
+            logger.info("Successfully fetched token from metadata server.");
             return accessToken;
           }
         }
       } catch (Exception e) {
-        logger.log(Level.SEVERE, "Unexpected error fetching/parsing token from metadata server", e);
+        logger.severe(
+            String.format(
+                "Unexpected error fetching/parsing token from metadata server (%s)", e.toString()));
       }
       return null;
     }
-    logger.log(Level.INFO, "Not running in Cloud Run, using gcloud for token...");
+    logger.info("Not running in Cloud Run, using gcloud for token...");
     String project = System.getenv("PROJECT_ID");
     if (project == null) {
       throw new RuntimeException("No PROJECT_ID set... cannot continue.");
@@ -109,7 +110,7 @@ public class FetchService {
   private static String _fetch(
       String uri, String method, Map<String, String> requestHeaders, Map<String, Object> payload)
       throws URISyntaxException, IOException, InterruptedException {
-    logger.log(Level.FINE, String.format("*** fetch [%s %s]...", method, uri));
+    logger.fine(String.format("*** fetch [%s %s]...", method, uri));
 
     HttpRequest.Builder builder = HttpRequest.newBuilder().uri(new URI(uri));
     if (requestHeaders != null) {
@@ -135,9 +136,9 @@ public class FetchService {
     HttpClient client = HttpClient.newHttpClient();
     HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
     HttpHeaders responseHeaders = response.headers();
-    logger.log(Level.FINE, String.format("Response headers:\n%s", responseHeaders.toString()));
+    logger.fine(String.format("Response headers:\n%s", responseHeaders.toString()));
     String body = response.body();
-    logger.log(Level.FINE, String.format("\n\n=>\n%s", body));
+    logger.fine(String.format("\n\n=>\n%s", body));
     return body;
   }
 
@@ -175,7 +176,7 @@ public class FetchService {
   private static String executeCommand(String... command) { // Changed to static method
     try {
       ProcessBuilder processBuilder = new ProcessBuilder(command);
-      logger.log(Level.INFO, String.format("Executing command: %s", String.join(" ", command)));
+      logger.info(String.format("Executing command: %s", String.join(" ", command)));
 
       Function<InputStream, String> slurp =
           inputStream -> {
@@ -191,8 +192,7 @@ public class FetchService {
               }
               return output.toString().trim();
             } catch (java.lang.Exception exc1) {
-              logger.log(
-                  Level.SEVERE, String.format("Exception in slurp: %s", exc1.toString()), exc1);
+              logger.severe(String.format("Exception in slurp: %s", exc1.toString()));
               return null;
             }
           };
@@ -217,8 +217,8 @@ public class FetchService {
 
       return output;
     } catch (java.lang.Exception exc1) {
-      logger.log(
-          Level.SEVERE, String.format("Exception executing command: %s", exc1.toString()), exc1);
+      logger.severe(String.format("Exception executing command: %s", exc1.toString()));
+      exc1.printStackTrace();
     }
     return null;
   }
