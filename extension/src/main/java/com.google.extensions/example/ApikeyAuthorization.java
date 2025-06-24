@@ -103,7 +103,7 @@ public class ApikeyAuthorization extends ServiceCallout {
     };
 
     public ApikeyStatus keyMissing() {
-      _result = Result.keyMissing;
+      _result = Result.KeyMissing;
       return this;
     }
 
@@ -137,17 +137,19 @@ public class ApikeyAuthorization extends ServiceCallout {
     }
 
     public String getMessage() {
-      // AI! Implement the logic here to return the correct string, depending on the value of
-      // _result.
-      //
-      // Follow this table:
-      //   KeyMissing: "API Key not present"
-      //   InvalidNotFound: "Invalid API Key"
-      //   FoundNoMatch: "No matching operation found"
-      //   Valid: "Valid API Key"
-      //   Unset: "No status"
-
-      return message;
+      switch (_result) {
+        case KeyMissing:
+          return "API Key not present";
+        case InvalidNotFound:
+          return "Invalid API Key";
+        case FoundNoMatch:
+          return "No matching operation found";
+        case Valid:
+          return "Valid API Key";
+        case Unset:
+        default:
+          return "No status";
+      }
     }
   }
 
@@ -196,7 +198,7 @@ public class ApikeyAuthorization extends ServiceCallout {
             .orElse(null);
 
     if (apikey == null) {
-      return ApikeyStatus.forKey("").missing();
+      return ApikeyStatus.forKey("").keyMissing();
     }
 
     return checkProvidedApiKey(requestHeaders, apikey);
@@ -341,7 +343,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     StatusCode statusCode = StatusCode.Forbidden;
     ImmutableMap<String, String> responseHeadersToAdd = null;
-    if (apikeyStatus.isResult(ApikeyStatus.Result.Missing)) {
+    if (apikeyStatus.isResult(ApikeyStatus.Result.KeyMissing)) {
       responseHeadersToAdd = ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
       statusCode = StatusCode.Unauthorized;
     }
