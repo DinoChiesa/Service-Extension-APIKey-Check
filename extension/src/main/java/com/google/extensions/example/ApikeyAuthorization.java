@@ -177,6 +177,9 @@ public class ApikeyAuthorization extends ServiceCallout {
       if ("startup".equals(loadedAt)) {
         logger.info("API keys were loaded at startup (no expiry).");
       } else {
+        // AI! extract this calculation logic into a separate helper method,
+        // which just returns the remainingSeconds value. Put the try..catch
+        // clause in the helper method.
         try {
           Instant loadedInstant = Instant.parse(loadedAt);
           int ttlMinutes = CacheService.getTtlMinutes();
