@@ -17,6 +17,7 @@ package com.google.extensions.example;
 
 import com.github.benmanes.caffeine.cache.CacheLoader;
 import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.Expiry;
 import com.github.benmanes.caffeine.cache.LoadingCache;
 import java.util.HashMap;
 import java.util.Map;
@@ -24,16 +25,26 @@ import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import org.checkerframework.checker.index.qual.NonNegative;
 
 public class CacheService {
   private static CacheService instance;
-  private static final int TTL_MINUTES = 3;
   private final LoadingCache<String, Object> cache;
+
+  private static class LoaderConfig {
+    final Function<String, Object> loader;
+    final long durationNanos;
+
+    LoaderConfig(Function<String, Object> loader, long duration, TimeUnit unit) {
+      this.loader = loader;
+      this.durationNanos = unit.toNanos(duration);
+    }
+  }
 
   // Each loader has a test function that looks at the key. If the test
   // returns true, then that loader is used. First loader with a test that
   // evaluates to true, wins.
-  private final Map<Predicate<String>, Function<String, Object>> loaders = new HashMap<>();
+  private final Map<Predicate<String>, LoaderConfig> loaders = new HashMap<>();
 
   public static CacheService getInstance() {
     if (instance == null) {
@@ -64,22 +75,39 @@ public class CacheService {
                   .map(
                       entry -> {
                         System.out.printf("CacheLoader: Loading data for key: %s\n", key);
-                        return entry.getValue().apply(key);
+                        return entry.getValue().loader.apply(key);
                       });
 
           return result.orElse(null);
         };
 
+    final Expiry<String, Object> expiryPolicy =
+        new Expiry<String, Object>() {
+          @Override
+          public long expireAfterCreate(String key, Object value, long currentTime) {
+            return loaders.entrySet().stream()
+                .filter(entry -> entry.getKey().test(key))
+                .findFirst()
+                .map(entry -> entry.getValue().durationNanos)
+                .orElse(TimeUnit.MINUTES.toNanos(5)); // Default TTL
+          }
+
+          @Override
+          public long expireAfterUpdate(
+              String key, Object value, long currentTime, @NonNegative long currentDuration) {
+            return expireAfterCreate(key, value, currentTime);
+          }
+
+          @Override
+          public long expireAfterRead(
+              String key, Object value, long currentTime, @NonNegative long currentDuration) {
+            return currentDuration; // Do not change expiry on read
+          }
+        };
+
     // Build the LoadingCache instance
     this.cache =
-        Caffeine.newBuilder()
-            .expireAfterWrite(TTL_MINUTES, TimeUnit.MINUTES)
-            .maximumSize(500)
-            .build(cacheLoader);
-  }
-
-  public static int getTtlMinutes() {
-    return TTL_MINUTES;
+        Caffeine.newBuilder().expireAfter(expiryPolicy).maximumSize(500).build(cacheLoader);
   }
 
   public Object get(final String key) {
@@ -87,9 +115,12 @@ public class CacheService {
   }
 
   public CacheService registerLoader(
-      final Predicate<String> test, final Function<String, Object> loader)
+      final Predicate<String> test,
+      final Function<String, Object> loader,
+      final long duration,
+      final TimeUnit unit)
       throws IllegalStateException {
-    loaders.put(test, loader);
+    loaders.put(test, new LoaderConfig(loader, duration, unit));
     return this;
   }
 }

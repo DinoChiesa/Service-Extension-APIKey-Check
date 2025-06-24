@@ -32,6 +32,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -47,6 +48,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
   private static final Logger logger = Logger.getLogger(ApikeyAuthorization.class.getName());
   private static final String ACL_RANGE = "Keys!A2:C102";
+  private static final int APIKEYS_TTL_MINUTES = 2;
   private static Map<String, Object> FIXED_KEYS;
 
   static {
@@ -88,7 +90,10 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     CacheService.getInstance()
         .registerLoader(
-            (key) -> key.equals("apikeys"), (_ignoredKey) -> this.loadApikeys(_ignoredKey));
+            (key) -> key.equals("apikeys"),
+            (_ignoredKey) -> this.loadApikeys(_ignoredKey),
+            APIKEYS_TTL_MINUTES,
+            TimeUnit.MINUTES);
   }
 
   private Object loadApikeys(String _ignoredKey) {
@@ -245,7 +250,7 @@ public class ApikeyAuthorization extends ServiceCallout {
   private static Long calculateRemainingSeconds(String loadedAt) {
     try {
       Instant loadedInstant = Instant.parse(loadedAt);
-      int ttlMinutes = CacheService.getTtlMinutes();
+      int ttlMinutes = APIKEYS_TTL_MINUTES;
       Instant expiryTime = loadedInstant.plus(ttlMinutes, ChronoUnit.MINUTES);
       return Duration.between(Instant.now(), expiryTime).toSeconds();
     } catch (java.time.format.DateTimeParseException e) {

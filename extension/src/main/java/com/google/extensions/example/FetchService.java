@@ -46,7 +46,9 @@ public class FetchService {
     CacheService.getInstance()
         .registerLoader(
             (key) -> key.endsWith("gcptoken"),
-            (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey));
+            (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey),
+            30,
+            TimeUnit.MINUTES);
     // .registerLoader((key) -> key.endsWith("products"), (_ignoredKey) -> this.loadProducts());
   }
 
