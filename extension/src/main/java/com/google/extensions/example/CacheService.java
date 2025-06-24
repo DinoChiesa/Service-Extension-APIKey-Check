@@ -35,9 +35,9 @@ public class CacheService {
     final Function<String, Object> loader;
     final long durationNanos;
 
-    LoaderConfig(Function<String, Object> loader, long duration, TimeUnit unit) {
+    LoaderConfig(Function<String, Object> loader, long durationInMinutes) {
       this.loader = loader;
-      this.durationNanos = unit.toNanos(duration);
+      this.durationNanos = TimeUnit.MINUTES.toNanos(durationInMinutes);
     }
   }
 
@@ -105,7 +105,6 @@ public class CacheService {
           }
         };
 
-    // Build the LoadingCache instance
     this.cache =
         Caffeine.newBuilder().expireAfter(expiryPolicy).maximumSize(500).build(cacheLoader);
   }
@@ -115,12 +114,9 @@ public class CacheService {
   }
 
   public CacheService registerLoader(
-      final Predicate<String> test,
-      final Function<String, Object> loader,
-      final long duration,
-      final TimeUnit unit)
+      final Predicate<String> test, final Function<String, Object> loader, final long duration)
       throws IllegalStateException {
-    loaders.put(test, new LoaderConfig(loader, duration, unit));
+    loaders.put(test, new LoaderConfig(loader, duration));
     return this;
   }
 }

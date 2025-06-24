@@ -32,7 +32,6 @@ import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -92,8 +91,7 @@ public class ApikeyAuthorization extends ServiceCallout {
         .registerLoader(
             (key) -> key.equals("apikeys"),
             (_ignoredKey) -> this.loadApikeys(_ignoredKey),
-            APIKEYS_TTL_MINUTES,
-            TimeUnit.MINUTES);
+            APIKEYS_TTL_MINUTES);
   }
 
   private Object loadApikeys(String _ignoredKey) {

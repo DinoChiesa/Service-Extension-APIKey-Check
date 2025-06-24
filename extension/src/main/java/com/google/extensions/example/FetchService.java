@@ -41,14 +41,14 @@ public class FetchService {
   private static final Logger logger = Logger.getLogger(FetchService.class.getName());
   private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
   private static final Type mapType = new TypeToken<HashMap<String, Object>>() {}.getType();
+  private static final int TOKEN_TTL_MINUTES = 30;
 
   public FetchService() throws IOException, InterruptedException, URISyntaxException {
     CacheService.getInstance()
         .registerLoader(
             (key) -> key.endsWith("gcptoken"),
             (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey),
-            30,
-            TimeUnit.MINUTES);
+            TOKEN_TTL_MINUTES);
     // .registerLoader((key) -> key.endsWith("products"), (_ignoredKey) -> this.loadProducts());
   }
 
