@@ -218,6 +218,12 @@ public class ApikeyAuthorization extends ServiceCallout {
                 keyrow -> {
                   if (keyrow.size() >= 3) {
                     String allowedPath = keyrow.get(1);
+                    // AI! modify the logic here, to split the keyrow.get(2) by commas, and
+                    // trim whitespace.  Then modify the check of the requestedMethod against
+                    // any of the values in the resulting list. Also, make the check
+                    // case-insensitive.
+                    // (You will not be able to use List.contains(), you need to check for
+                    // equalsIgnoreCase())
                     String allowedMethod = keyrow.get(2);
                     String pathRegex = "^" + allowedPath.replace("*", "[^/]+") + "$";
                     return requestedPath.matches(pathRegex)
