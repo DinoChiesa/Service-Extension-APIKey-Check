@@ -177,14 +177,8 @@ public class ApikeyAuthorization extends ServiceCallout {
       if ("startup".equals(loadedAt)) {
         logger.info("API keys were loaded at startup (no expiry).");
       } else {
-        // AI! extract this calculation logic into a separate helper method,
-        // which just returns the remainingSeconds value. Put the try..catch
-        // clause in the helper method.
-        try {
-          Instant loadedInstant = Instant.parse(loadedAt);
-          int ttlMinutes = CacheService.getTtlMinutes();
-          Instant expiryTime = loadedInstant.plus(ttlMinutes, ChronoUnit.MINUTES);
-          long remainingSeconds = Duration.between(Instant.now(), expiryTime).toSeconds();
+        Long remainingSeconds = calculateRemainingSeconds(loadedAt);
+        if (remainingSeconds != null) {
           if (remainingSeconds < 0) {
             logger.info(String.format("API keys loaded at %s have expired.", loadedAt));
           } else {
@@ -193,8 +187,6 @@ public class ApikeyAuthorization extends ServiceCallout {
                     "API keys loaded at %s, TTL remaining: %d seconds.",
                     loadedAt, remainingSeconds));
           }
-        } catch (java.time.format.DateTimeParseException e) {
-          logger.warning(String.format("Could not parse load time for API keys: '%s'", loadedAt));
         }
       }
     }
@@ -249,6 +241,18 @@ public class ApikeyAuthorization extends ServiceCallout {
             "API Key is valid, but not authorized for path:%s, method:%s",
             requestedPath, requestedMethod));
     return statusBuilder.noMatch();
+  }
+
+  private static Long calculateRemainingSeconds(String loadedAt) {
+    try {
+      Instant loadedInstant = Instant.parse(loadedAt);
+      int ttlMinutes = CacheService.getTtlMinutes();
+      Instant expiryTime = loadedInstant.plus(ttlMinutes, ChronoUnit.MINUTES);
+      return Duration.between(Instant.now(), expiryTime).toSeconds();
+    } catch (java.time.format.DateTimeParseException e) {
+      logger.warning(String.format("Could not parse load time for API keys: '%s'", loadedAt));
+      return null;
+    }
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
