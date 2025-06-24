@@ -15,36 +15,55 @@
 
 package com.google.extensions.example;
 
-import com.github.benmanes.caffeine.cache.CacheLoader;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.LoadingCache;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import java.util.HashMap;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class CacheService {
   private static final Logger logger = Logger.getLogger(CacheService.class.getName());
   private static CacheService instance;
 
-  // A map of predicates to dedicated cache instances.
-  private final Map<Predicate<String>, LoadingCache<String, Object>> caches = new HashMap<>();
-
-  // A dedicated thread pool for performing asynchronous cache refreshes.
+  private final Map<String, CacheEntry> caches = new ConcurrentHashMap<>();
   private final ExecutorService refreshExecutor =
       Executors.newFixedThreadPool(
-          4, // A reasonable number of threads for background tasks
+          4,
           new ThreadFactoryBuilder()
               .setNameFormat("cache-refresh-%d")
-              .setDaemon(true) // Allows the JVM to exit without waiting for these threads
+              .setDaemon(true)
               .build());
+
+  private static class CacheEntry {
+    volatile Object value;
+    volatile Instant expiryTime;
+    final String key;
+    final Function<String, Object> loader;
+    final long ttlMinutes;
+    final ReentrantLock refreshLock = new ReentrantLock();
+
+    CacheEntry(String key, Function<String, Object> loader, long ttlMinutes) {
+      this.key = key;
+      this.loader = loader;
+      this.ttlMinutes = ttlMinutes;
+      // Perform initial synchronous load to ensure a value is always present.
+      logger.info(String.format("Performing initial synchronous load for cache key: '%s'", key));
+      this.value = this.loader.apply(key);
+      updateExpiry();
+      logger.info(String.format("Initial load complete for cache key: '%s'", key));
+    }
+
+    void updateExpiry() {
+      this.expiryTime = Instant.now().plus(this.ttlMinutes, ChronoUnit.MINUTES);
+    }
+  }
 
   public static synchronized CacheService getInstance() {
     if (instance == null) {
@@ -56,49 +75,54 @@ public class CacheService {
   private CacheService() {}
 
   public Object get(final String key) {
-    Optional<LoadingCache<String, Object>> cacheOpt =
-        caches.entrySet().stream()
-            .filter(entry -> entry.getKey().test(key))
-            .map(Map.Entry::getValue)
-            .findFirst();
-
-    if (cacheOpt.isPresent()) {
-      return cacheOpt.get().get(key);
+    CacheEntry entry = caches.get(key);
+    if (entry == null) {
+      logger.warning(String.format("No cache entry found for key: '%s'", key));
+      return null;
     }
 
-    logger.warning(String.format("No cache registered for key: %s", key));
-    return null;
+    // Check if the entry is stale
+    if (Instant.now().isAfter(entry.expiryTime)) {
+      // Entry is stale, try to acquire a lock to refresh it.
+      // tryLock() is non-blocking.
+      if (entry.refreshLock.tryLock()) {
+        logger.info(
+            String.format(
+                "Cache entry for '%s' is stale. Triggering asynchronous refresh.", key));
+        // Got the lock, so this thread is responsible for triggering the refresh.
+        CompletableFuture.runAsync(
+            () -> {
+              try {
+                Object newValue = entry.loader.apply(key);
+                entry.value = newValue;
+                entry.updateExpiry();
+                logger.info(String.format("Asynchronous refresh for '%s' complete.", key));
+              } catch (Exception e) {
+                logger.log(Level.SEVERE, "Error refreshing cache for key: " + key, e);
+              } finally {
+                // Always release the lock.
+                entry.refreshLock.unlock();
+              }
+            },
+            refreshExecutor);
+      }
+    }
+    // Always return the current value, which might be stale.
+    return entry.value;
   }
 
   public CacheService registerLoader(
-      final Predicate<String> test,
-      final Function<String, Object> loader,
-      final long durationInMinutes)
-      throws IllegalStateException {
-
-    CacheLoader<String, Object> cacheLoader =
-        new CacheLoader<>() {
-          @Override
-          public Object load(String key) {
-            logger.info(String.format("Synchronously loading data for key: %s", key));
-            return loader.apply(key);
-          }
-
-          @Override
-          public CompletableFuture<Object> reload(String key, Object oldValue) {
-            logger.info(String.format("Asynchronously refreshing data for key: %s", key));
-            return CompletableFuture.supplyAsync(() -> loader.apply(key), refreshExecutor);
-          }
-        };
-
-    LoadingCache<String, Object> newCache =
-        Caffeine.newBuilder()
-            .refreshAfterWrite(durationInMinutes, TimeUnit.MINUTES)
-            .expireAfterWrite(durationInMinutes * 2, TimeUnit.MINUTES)
-            .maximumSize(100) // Each cache is specialized, so a smaller size is fine.
-            .build(cacheLoader);
-
-    caches.put(test, newCache);
+      final String key, final Function<String, Object> loader, final long durationInMinutes) {
+    if (caches.containsKey(key)) {
+      logger.warning(String.format("Loader for key '%s' is already registered. Ignoring.", key));
+      return this;
+    }
+    logger.info(
+        String.format(
+            "Registering cache loader for key: '%s' with TTL: %d minutes.",
+            key, durationInMinutes));
+    // The constructor of CacheEntry performs the initial synchronous load.
+    caches.put(key, new CacheEntry(key, loader, durationInMinutes));
     return this;
   }
 }

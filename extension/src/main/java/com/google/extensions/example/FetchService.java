@@ -41,11 +41,23 @@ public class FetchService {
   private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
   private static final Type mapType = new TypeToken<HashMap<String, Object>>() {}.getType();
   private static final int TOKEN_TTL_MINUTES = 30;
+  private static FetchService instance;
 
-  public FetchService() throws IOException, InterruptedException, URISyntaxException {
+  public static synchronized FetchService getInstance() {
+    if (instance == null) {
+      try {
+        instance = new FetchService();
+      } catch (Exception e) {
+        throw new RuntimeException("Failed to initialize FetchService", e);
+      }
+    }
+    return instance;
+  }
+
+  private FetchService() throws IOException, InterruptedException, URISyntaxException {
     CacheService.getInstance()
         .registerLoader(
-            (key) -> key.endsWith("gcptoken"),
+            "gcptoken",
             (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey),
             TOKEN_TTL_MINUTES);
   }

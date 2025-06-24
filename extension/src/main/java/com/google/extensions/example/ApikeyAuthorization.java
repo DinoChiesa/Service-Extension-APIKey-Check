@@ -89,9 +89,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     CacheService.getInstance()
         .registerLoader(
-            (key) -> key.equals("apikeys"),
-            (_ignoredKey) -> this.loadApikeys(_ignoredKey),
-            APIKEYS_TTL_MINUTES);
+            "apikeys", (_ignoredKey) -> this.loadApikeys(_ignoredKey), APIKEYS_TTL_MINUTES);
   }
 
   private Object loadApikeys(String _ignoredKey) {
@@ -106,7 +104,7 @@ public class ApikeyAuthorization extends ServiceCallout {
           String.format(
               "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s", SHEET_ID, ACL_RANGE);
       logger.info(String.format("fetching %s", uri));
-      var fetch = new FetchService();
+      var fetch = FetchService.getInstance();
       var map = fetch.get(uri);
       map.put("loaded", Instant.now().toString());
       return map;
