@@ -134,7 +134,7 @@ public class ApikeyAuthorization extends ServiceCallout {
             .orElse(null);
 
     if (apikey == null) {
-      return ApikeyStatus.forKey("").keyMissing();
+      return ApikeyStatus.builder().forKey("").keyMissing();
     }
 
     return checkProvidedApiKey(requestHeaders, apikey);
@@ -163,10 +163,10 @@ public class ApikeyAuthorization extends ServiceCallout {
   private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
     @SuppressWarnings("unchecked")
     Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
-    ApikeyStatus status = ApikeyStatus.forKey(apikey);
+    ApikeyStatus.Builder statusBuilder = ApikeyStatus.builder().forKey(apikey);
     if (map == null) {
       logger.info("Could not load apikeys from cache.");
-      return status.invalid();
+      return statusBuilder.invalid();
     }
     // showMap(map);
     logger.info(String.format("API keys were loaded at %s.", (String) map.get("loaded")));
@@ -174,7 +174,7 @@ public class ApikeyAuthorization extends ServiceCallout {
     List<List<String>> knownkeys = (List<List<String>>) map.get("values");
     if (knownkeys == null) {
       logger.info("No API keys available.");
-      return status.invalid();
+      return statusBuilder.invalid();
     }
 
     List<List<String>> matchingKeyEntries =
@@ -184,14 +184,14 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     if (matchingKeyEntries.size() == 0) {
       logger.info(String.format("Did not find that API Key (%s).", apikey));
-      return status.invalid();
+      return statusBuilder.invalid();
     }
 
     String requestedPath = getHeader(headers, ":path");
     String requestedMethod = getHeader(headers, ":method");
     if (requestedPath == null || requestedMethod == null) {
       logger.warning("Cannot find path and/or method");
-      return status.invalid();
+      return statusBuilder.invalid();
     }
 
     boolean isAuthorized =
@@ -205,7 +205,6 @@ public class ApikeyAuthorization extends ServiceCallout {
                         Arrays.stream(allowedMethods.split(","))
                             .map(String::trim)
                             .anyMatch(m -> m.equalsIgnoreCase(requestedMethod));
-
                     String pathRegex = "^" + allowedPath.replace("*", "[^/]+") + "$";
                     return requestedPath.matches(pathRegex) && methodMatch;
                   }
@@ -213,14 +212,14 @@ public class ApikeyAuthorization extends ServiceCallout {
                 });
 
     if (isAuthorized) {
-      return status.valid();
+      return statusBuilder.valid();
     }
 
     logger.info(
         String.format(
             "API Key is valid, but not authorized for path:%s, method:%s",
             requestedPath, requestedMethod));
-    return status.noMatch();
+    return statusBuilder.noMatch();
   }
 
   private static String getHeader(HttpHeaders headers, String headerName) {
@@ -279,7 +278,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     StatusCode statusCode = StatusCode.Forbidden;
     ImmutableMap<String, String> responseHeadersToAdd = null;
-    if (apikeyStatus.isResult(ApikeyStatus.Result.KeyMissing)) {
+    if (apikeyStatus.isKeyMissing()) {
       responseHeadersToAdd = ImmutableMap.of("WWW-Authenticate", "APIKey realm=\"example.com\"");
       statusCode = StatusCode.Unauthorized;
     }

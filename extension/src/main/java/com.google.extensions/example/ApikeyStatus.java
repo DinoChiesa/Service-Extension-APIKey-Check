@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, 2025 Google, LLC.
+ * Copyright (c) 2025 Google, LLC.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,34 +29,63 @@ public class ApikeyStatus {
     Unset
   };
 
-  public ApikeyStatus keyMissing() {
-    _result = Result.KeyMissing;
-    return this;
+  private ApikeyStatus(String apikey, Result result) {
+    _apikey = apikey;
+    _result = result;
   }
 
-  public ApikeyStatus invalid() {
-    _result = Result.InvalidNotFound;
-    return this;
+  public static ApikeyStatus.Builder builder() {
+    return new ApikeyStatus.Builder();
   }
 
-  public ApikeyStatus noMatch() {
-    _result = Result.FoundNoMatch;
-    return this;
-  }
+  public static class Builder {
+    private Result _result = Result.Unset;
+    private String _apikey;
+    private boolean _final;
 
-  public ApikeyStatus valid() {
-    _result = Result.Valid;
-    return this;
-  }
+    private Builder() {}
 
-  public static ApikeyStatus forKey(String apikey) {
-    var status = new ApikeyStatus();
-    status._apikey = apikey;
-    return status;
+    public static ApikeyStatus.Builder forKey(String apikey) {
+      var builder = new ApikeyStatus.Builder();
+      builder._apikey = apikey;
+      return builder;
+    }
+
+    private ApikeyStatus build() {
+      if (_final) {
+        throw new RuntimeException("already final");
+      }
+      _final = true;
+      return new ApikeyStatus(_apikey, _result);
+    }
+
+    public ApikeyStatus keyMissing() {
+      _result = Result.KeyMissing;
+      return this.build();
+    }
+
+    public ApikeyStatus invalid() {
+      _result = Result.InvalidNotFound;
+      return this.build();
+    }
+
+    public ApikeyStatus noMatch() {
+      _result = Result.FoundNoMatch;
+      return this.build();
+    }
+
+    public ApikeyStatus valid() {
+      _result = Result.Valid;
+      return this.build();
+    }
   }
 
   public boolean isValid() {
     return _result == Result.Valid;
+  }
+
+  public boolean isKeyMissing() {
+    return _result == Result.KeyMissing;
   }
 
   public boolean isResult(Result result) {
