@@ -89,6 +89,7 @@ public class ApikeyAuthorization extends ServiceCallout {
             (key) -> key.equals("apikeys"), (_ignoredKey) -> this.loadApikeys(_ignoredKey));
   }
 
+  // AI! Extract the ApikeyStatus class into a separate Java source file.
   static class ApikeyStatus {
     // private String _message;
     private Result _result = Result.Unset;
