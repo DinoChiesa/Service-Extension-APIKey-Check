@@ -35,6 +35,7 @@ import java.util.Map;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import utils.JarUtils;
 
 /**
@@ -106,6 +107,7 @@ public class ApikeyAuthorization extends ServiceCallout {
               "https://sheets.googleapis.com/v4/spreadsheets/%s/values/%s", SHEET_ID, ACL_RANGE);
       logger.info(String.format("fetching %s", uri));
       var map = fetch.get(uri);
+      logger.info(String.format("keys loaded from %s", uri));
       map.put("loaded", Instant.now().toString());
       return map;
     } catch (java.lang.Exception exc1) {
@@ -137,41 +139,40 @@ public class ApikeyAuthorization extends ServiceCallout {
             .orElse(null);
 
     if (apikey == null) {
-      return ApikeyStatus.builder().forKey("").keyMissing();
+      return ApikeyStatus.keyMissing();
     }
 
     return checkProvidedApiKey(requestHeaders, apikey);
   }
 
-  // private static void showMap(Map<String, Object> map) {
-  //   for (Map.Entry<String, Object> entry : map.entrySet()) {
-  //     String key = entry.getKey();
-  //     Object value = entry.getValue();
-  //     System.out.printf("%s => (%s) %s\n", key, value.getClass().toString(), value.toString());
-  //     if (key.equals("values")) {
-  //       @SuppressWarnings("unchecked")
-  //       List<Object> values = (List<Object>) value;
-  //       IntStream.range(0, values.size())
-  //           .boxed()
-  //           .forEach(
-  //               ix -> {
-  //                 Object v = values.get(ix);
-  //                 System.out.printf(
-  //                     "   %d => (%s) %s\n", ix, v.getClass().toString(), v.toString());
-  //               });
-  //     }
-  //   }
-  // }
+  private static void showMap(Map<String, Object> map) {
+    System.out.printf("Map:\n");
+    for (Map.Entry<String, Object> entry : map.entrySet()) {
+      String key = entry.getKey();
+      Object value = entry.getValue();
+      System.out.printf("%s => (%s) %s\n", key, value.getClass().toString(), value.toString());
+      if (key.equals("values")) {
+        @SuppressWarnings("unchecked")
+        List<Object> values = (List<Object>) value;
+        IntStream.range(0, values.size())
+            .boxed()
+            .forEach(
+                ix -> {
+                  Object v = values.get(ix);
+                  System.out.printf(
+                      "   %d => (%s) %s\n", ix, v.getClass().toString(), v.toString());
+                });
+      }
+    }
+  }
 
   private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
     @SuppressWarnings("unchecked")
     Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
-    ApikeyStatus.Builder statusBuilder = ApikeyStatus.builder().forKey(apikey);
     if (map == null) {
       logger.info("Could not load apikeys from cache.");
-      return statusBuilder.invalid();
+      return ApikeyStatus.invalid(apikey);
     }
-    // showMap(map);
 
     String loadedAt = (String) map.get("loaded");
     if (loadedAt != null) {
@@ -181,7 +182,10 @@ public class ApikeyAuthorization extends ServiceCallout {
         Long remainingSeconds = calculateRemainingSeconds(loadedAt);
         if (remainingSeconds != null) {
           if (remainingSeconds < 0) {
-            logger.info(String.format("API keys loaded at %s have expired.", loadedAt));
+            logger.info(
+                String.format(
+                    "API keys loaded at %s expired %d seconds ago",
+                    loadedAt, (0 - remainingSeconds)));
           } else {
             logger.info(
                 String.format(
@@ -190,13 +194,16 @@ public class ApikeyAuthorization extends ServiceCallout {
           }
         }
       }
+    } else {
+      showMap(map);
+      logger.info("no key indicating when API keys were loaded.");
     }
 
     @SuppressWarnings("unchecked")
     List<List<String>> knownkeys = (List<List<String>>) map.get("values");
     if (knownkeys == null) {
       logger.info("No API keys available.");
-      return statusBuilder.invalid();
+      return ApikeyStatus.invalid(apikey);
     }
 
     List<List<String>> matchingKeyEntries =
@@ -206,14 +213,14 @@ public class ApikeyAuthorization extends ServiceCallout {
 
     if (matchingKeyEntries.size() == 0) {
       logger.info(String.format("Did not find that API Key (%s).", apikey));
-      return statusBuilder.invalid();
+      return ApikeyStatus.invalid(apikey);
     }
 
     String requestedPath = getHeader(headers, ":path");
     String requestedMethod = getHeader(headers, ":method");
     if (requestedPath == null || requestedMethod == null) {
       logger.warning("Cannot find path and/or method");
-      return statusBuilder.invalid();
+      return ApikeyStatus.invalid(apikey);
     }
 
     boolean isAuthorized =
@@ -234,13 +241,13 @@ public class ApikeyAuthorization extends ServiceCallout {
                 });
 
     if (isAuthorized) {
-      return statusBuilder.valid();
+      return ApikeyStatus.valid(apikey);
     }
 
     logger.info(
         String.format(
             "API Key is valid, but not authorized for %s %s", requestedMethod, requestedPath));
-    return statusBuilder.noMatch();
+    return ApikeyStatus.noMatch(apikey);
   }
 
   private static Long calculateRemainingSeconds(String loadedAt) {

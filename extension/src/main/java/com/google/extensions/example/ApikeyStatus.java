@@ -16,94 +16,47 @@
 
 package com.google.extensions.example;
 
-public class ApikeyStatus {
-  private Result _result = Result.Unset;
-  private String _apikey;
+public record ApikeyStatus(String apikey, Result result) {
 
-  enum Result {
+  public enum Result {
     KeyMissing,
     InvalidNotFound,
     FoundNoMatch,
     Valid,
     Unset
-  };
-
-  private ApikeyStatus(String apikey, Result result) {
-    _apikey = apikey;
-    _result = result;
   }
 
   public boolean isValid() {
-    return _result == Result.Valid;
+    return result == Result.Valid;
   }
 
   public boolean isKeyMissing() {
-    return _result == Result.KeyMissing;
-  }
-
-  public boolean isResult(Result result) {
-    return _result == result;
+    return result == Result.KeyMissing;
   }
 
   public String getMessage() {
-    switch (_result) {
-      case KeyMissing:
-        return "API Key not present";
-      case InvalidNotFound:
-        return "Invalid API Key";
-      case FoundNoMatch:
-        return "No matching operation found";
-      case Valid:
-        return "Valid API Key";
-      case Unset:
-      default:
-        return "No status";
-    }
+    return switch (result) {
+      case KeyMissing -> "API Key not present";
+      case InvalidNotFound -> "Invalid API Key";
+      case FoundNoMatch -> "No matching operation found";
+      case Valid -> "Valid API Key";
+      default -> "No status"; // Unset
+    };
   }
 
-  public static ApikeyStatus.Builder builder() {
-    return new ApikeyStatus.Builder();
+  public static ApikeyStatus keyMissing() {
+    return new ApikeyStatus(null, Result.KeyMissing);
   }
 
-  public static class Builder {
-    private Result _result = Result.Unset;
-    private String _apikey;
-    private boolean _final;
+  public static ApikeyStatus invalid(String apikey) {
+    return new ApikeyStatus(apikey, Result.InvalidNotFound);
+  }
 
-    private Builder() {}
+  public static ApikeyStatus noMatch(String apikey) {
+    return new ApikeyStatus(apikey, Result.FoundNoMatch);
+  }
 
-    public static ApikeyStatus.Builder forKey(String apikey) {
-      var builder = new ApikeyStatus.Builder();
-      builder._apikey = apikey;
-      return builder;
-    }
-
-    private ApikeyStatus build() {
-      if (_final) {
-        throw new RuntimeException("already final");
-      }
-      _final = true;
-      return new ApikeyStatus(_apikey, _result);
-    }
-
-    public ApikeyStatus keyMissing() {
-      _result = Result.KeyMissing;
-      return this.build();
-    }
-
-    public ApikeyStatus invalid() {
-      _result = Result.InvalidNotFound;
-      return this.build();
-    }
-
-    public ApikeyStatus noMatch() {
-      _result = Result.FoundNoMatch;
-      return this.build();
-    }
-
-    public ApikeyStatus valid() {
-      _result = Result.Valid;
-      return this.build();
-    }
+  public static ApikeyStatus valid(String apikey) {
+    return new ApikeyStatus(apikey, Result.Valid);
   }
 }

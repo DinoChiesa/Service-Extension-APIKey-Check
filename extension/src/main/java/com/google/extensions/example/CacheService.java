@@ -35,11 +35,7 @@ public class CacheService {
   private final Map<String, CacheEntry> caches = new ConcurrentHashMap<>();
   private final ExecutorService refreshExecutor =
       Executors.newFixedThreadPool(
-          4,
-          new ThreadFactoryBuilder()
-              .setNameFormat("cache-refresh-%d")
-              .setDaemon(true)
-              .build());
+          4, new ThreadFactoryBuilder().setNameFormat("cache-refresh-%d").setDaemon(true).build());
 
   private static class CacheEntry {
     volatile Object value;
@@ -81,14 +77,17 @@ public class CacheService {
       return null;
     }
 
+    logger.info(
+        String.format(
+            "cache get(%s) expiry(%d) now(%d)",
+            key, entry.expiryTime.toEpochMilli(), Instant.now().toEpochMilli()));
     // Check if the entry is stale
     if (Instant.now().isAfter(entry.expiryTime)) {
       // Entry is stale, try to acquire a lock to refresh it.
       // tryLock() is non-blocking.
       if (entry.refreshLock.tryLock()) {
         logger.info(
-            String.format(
-                "Cache entry for '%s' is stale. Triggering asynchronous refresh.", key));
+            String.format("Cache entry for '%s' is stale. Triggering asynchronous refresh.", key));
         // Got the lock, so this thread is responsible for triggering the refresh.
         CompletableFuture.runAsync(
             () -> {
