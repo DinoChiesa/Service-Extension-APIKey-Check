@@ -15,17 +15,18 @@ official Google product.
 There is a new feature that allows people to write their own [service
 extensions](https://cloud.google.com/service-extensions/docs/overview) for use
 with the Google Cloud Load Balancers. These are GRPC servers that the load
-balancer will call "in line" while handling a request. The server can examine
-the request and perform various logic: authorization check, logging, redirects,
-and so on. Consult the documentation for dull details.
+balancer will call out to your logic, "in line" while handling a request. The
+service extension (your logic) can examine the request and do whatever you like:
+authorization check, logging, header injection, routing, and so on. Consult the
+documentation for full details.
 
 A customer came to me and asked, "What's the simplest way to get APIKey
-authentication on a small set of Cloud Run services?" And I think this service
-extensions approach is probably that.
+authentication on a small set of Cloud Run services?" And I think the service
+extensions approach is probably the simplest way
 
 Of course there are API Management systems - Google has API Gateway and of
-course Apigee... but those are a bit more involved, and maybe more than what
-some people want?
+course Apigee... but those are a bit more involved, and may be more than what
+some people want.
 
 The service extension idea provides a simpler approach, though it comes with the
 cost of some manage-it-yourself infrastructure.
@@ -44,7 +45,7 @@ This example has these elements:
   hardcoded into the Java app, but it would be straighforward to implement an
   external keystore in a Google Sheet or something more elaborate.
 
-The NodeJS app is very simple.  Not very interesting.
+The NodeJS app is very simple. Not very interesting.
 The interesting parts come with the Java authorization extension.
 Examine the code to see what it does.
 
@@ -113,22 +114,24 @@ Restore the APIkey enforcement again with script 9a.
 
 - What if I want to use multiple backend systems behind this Authorization Extension?
 
-  Not sure. I think you ought to be able to have multiple forwarding rules in the authz policy.
-  See script 9a.
+  Not sure. You should be able to use a traffic extension to perform routing. 
+  See [the documentation](https://cloud.google.com/service-extensions/docs/configure-traffic-extensions).
 
-- Would it be possible to implement the Authorization Extension in .NET?
-
-  In theory, yes. But I did not find a single ext\_proc example using .NET. There is a 5-year old
-  project that showed how to build the GRPC libraries for .NET, but that is only halfway to
-  building an ext\_proc extension. If anyone has an example here, let me know.
-
-- Why not just implement this in golang?
+- Why not just implement this Authorization Extension in golang?
 
   Sure!  Have at it.  Go has good grpc support, and would work just fine.
 
-- or python?!
+- or Python?!
 
-  Sure!  Python too. It also has good grpc support, and would work just fine.
+  Sure! Python too. It also has good grpc support, and would work just fine.
+
+- Would it be possible to implement the Authorization Extension in .NET?
+
+  In theory, yes. But I did not find a single ext\_proc example using
+  .NET. There is a 5-year old project that showed how to build the GRPC
+  libraries for .NET, but it seems to be stale, and even if it were fresh, that
+  would be only halfway to building an ext\_proc extension. If anyone has an
+  example here, let me know.
 
 
 ## Other Resources
