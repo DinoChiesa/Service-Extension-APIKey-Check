@@ -50,7 +50,6 @@ public class ApikeyAuthorization extends ServiceCallout {
   private static final String ACL_RANGE = "Keys!A2:C102";
   private static final int APIKEYS_TTL_MINUTES = 2;
   private static Map<String, Object> FIXED_KEYS;
-  private FetchService fetch = FetchService.getInstance();
 
   static {
     List<List<String>> keyrows =
@@ -71,8 +70,22 @@ public class ApikeyAuthorization extends ServiceCallout {
   }
 
   private boolean verbose = false;
+  private final FetchService fetch;
+  private final CacheService cacheService;
 
   public static class Builder extends ServiceCallout.Builder<ApikeyAuthorization.Builder> {
+    private CacheService cacheService;
+    private FetchService fetchService;
+
+    public Builder withCacheService(CacheService cacheService) {
+      this.cacheService = cacheService;
+      return this;
+    }
+
+    public Builder withFetchService(FetchService fetchService) {
+      this.fetchService = fetchService;
+      return this;
+    }
 
     @Override
     public ApikeyAuthorization build() {
@@ -88,10 +101,10 @@ public class ApikeyAuthorization extends ServiceCallout {
   public ApikeyAuthorization(ApikeyAuthorization.Builder builder) {
     super(builder);
     verbose = "true".equalsIgnoreCase(System.getenv("VERBOSE"));
-
-    CacheService.getInstance()
-        .registerLoader(
-            "apikeys", (_ignoredKey) -> this.loadApikeys(_ignoredKey), APIKEYS_TTL_MINUTES);
+    this.cacheService = builder.cacheService;
+    this.fetch = builder.fetchService;
+    this.cacheService.registerLoader(
+        "apikeys", (_ignoredKey) -> this.loadApikeys(_ignoredKey), APIKEYS_TTL_MINUTES);
   }
 
   private Object loadApikeys(String _ignoredKey) {
@@ -168,7 +181,7 @@ public class ApikeyAuthorization extends ServiceCallout {
 
   private ApikeyStatus checkProvidedApiKey(HttpHeaders headers, String apikey) {
     @SuppressWarnings("unchecked")
-    Map<String, Object> map = (Map<String, Object>) CacheService.getInstance().get("apikeys");
+    Map<String, Object> map = (Map<String, Object>) this.cacheService.get("apikeys");
     if (map == null) {
       logger.info("Could not load apikeys from cache.");
       return ApikeyStatus.invalid(apikey);
@@ -354,7 +367,10 @@ public class ApikeyAuthorization extends ServiceCallout {
    * @throws Exception If an error occurs during server startup or shutdown.
    */
   public static void main(String[] args) throws Exception {
-    ApikeyAuthorization server = new ApikeyAuthorization.Builder().build();
+    CacheService cache = new CacheService();
+    FetchService fetch = new FetchService(cache);
+    ApikeyAuthorization server =
+        new ApikeyAuthorization.Builder().withCacheService(cache).withFetchService(fetch).build();
     var ju = new JarUtils();
     logger.info(
         String.format(

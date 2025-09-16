@@ -41,25 +41,12 @@ public class FetchService {
   private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
   private static final Type mapType = new TypeToken<HashMap<String, Object>>() {}.getType();
   private static final int TOKEN_TTL_MINUTES = 30;
-  private static FetchService instance;
+  private final CacheService cacheService;
 
-  public static synchronized FetchService getInstance() {
-    if (instance == null) {
-      try {
-        instance = new FetchService();
-      } catch (Exception e) {
-        throw new RuntimeException("Failed to initialize FetchService", e);
-      }
-    }
-    return instance;
-  }
-
-  private FetchService() throws IOException, InterruptedException, URISyntaxException {
-    CacheService.getInstance()
-        .registerLoader(
-            "gcptoken",
-            (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey),
-            TOKEN_TTL_MINUTES);
+  public FetchService(CacheService cache) {
+    this.cacheService = cache;
+    this.cacheService.registerLoader(
+        "gcptoken", (_ignoredKey) -> this.loadGcpAccessToken(_ignoredKey), TOKEN_TTL_MINUTES);
   }
 
   public static boolean isRunningInCloud() {
@@ -156,7 +143,7 @@ public class FetchService {
 
   public Map<String, Object> fetch(String uri, String method, Map<String, Object> payload)
       throws URISyntaxException, IOException, InterruptedException {
-    String accessToken = (String) CacheService.getInstance().get("gcptoken");
+    String accessToken = (String) this.cacheService.get("gcptoken");
     String stringResult =
         _fetch(uri, method, Map.of("Authorization", "Bearer " + accessToken), payload);
     Map<String, Object> json = gson.fromJson(stringResult, mapType);

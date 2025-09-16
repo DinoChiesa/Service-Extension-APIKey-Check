@@ -30,7 +30,6 @@ import java.util.logging.Logger;
 
 public class CacheService {
   private static final Logger logger = Logger.getLogger(CacheService.class.getName());
-  private static CacheService instance;
 
   private final Map<String, CacheEntry> caches = new ConcurrentHashMap<>();
   private final ExecutorService refreshExecutor =
@@ -61,14 +60,7 @@ public class CacheService {
     }
   }
 
-  public static synchronized CacheService getInstance() {
-    if (instance == null) {
-      instance = new CacheService();
-    }
-    return instance;
-  }
-
-  private CacheService() {}
+  public CacheService() {}
 
   public Object get(final String key) {
     CacheEntry entry = caches.get(key);

@@ -65,7 +65,7 @@
             <manifestEntries>
               <Built-By>${user.name}</Built-By>
               <Build-Jdk>${java.version}</Build-Jdk>
-              <Build-Time>2025-06-24T04:01:45Z</Build-Time>
+              <Build-Time>2025-06-25T02:25:16Z</Build-Time>
               <Project-Version>20250622</Project-Version>
             </manifestEntries>
           </archive>
@@ -141,6 +141,12 @@
       </plugin>
     </plugins>
   </build>
+  <repositories>
+    <repository>
+      <id>jitpack.io</id>
+      <url>https://jitpack.io</url>
+    </repository>
+  </repositories>
   <dependencies>
     <dependency>
       <groupId>org.apache.tomcat</groupId>
@@ -167,6 +173,10 @@
       <scope>test</scope>
       <exclusions>
         <exclusion>
+          <artifactId>jspecify</artifactId>
+          <groupId>org.jspecify</groupId>
+        </exclusion>
+        <exclusion>
           <artifactId>asm</artifactId>
           <groupId>org.ow2.asm</groupId>
         </exclusion>
@@ -181,6 +191,10 @@
         <exclusion>
           <artifactId>truth-liteproto-extension</artifactId>
           <groupId>com.google.truth.extensions</groupId>
+        </exclusion>
+        <exclusion>
+          <artifactId>jspecify</artifactId>
+          <groupId>org.jspecify</groupId>
         </exclusion>
       </exclusions>
     </dependency>
@@ -243,7 +257,7 @@
   </dependencies>
   <properties>
     <gcp-project-name>${env.REPOSITORY_PROJECT}</gcp-project-name>
-    <proto-google-common-protos.version>2.58.2</proto-google-common-protos.version>
+    <proto-google-common-protos.version>2.59.0</proto-google-common-protos.version>
     <gson.version>2.13.1</gson.version>
     <maven.build.timestamp.format>yyyy-MM-dd'T'HH:mm:ssXXX</maven.build.timestamp.format>
     <io.envoyproxy.controlplane.version>1.0.49</io.envoyproxy.controlplane.version>
@@ -252,6 +266,5 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <junit.version>4.13.2</junit.version>
     <grpc.version>1.73.0</grpc.version>
-    <caffeine.version>3.2.1</caffeine.version>
   </properties>
 </project>
