@@ -1,6 +1,6 @@
 # Demonstration Authz service extension
 
-* The service  built with Java21. 
+* The service builds with Java21.
   You should be able to use Java24 as well.
 
 ## Disclaimer

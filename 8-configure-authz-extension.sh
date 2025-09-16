@@ -44,6 +44,12 @@ failOpen: false
 timeout: "0.1s"
 EOF
 
+# Can I haz this?
+#
+# supportedEvents:
+#   - REQUEST_HEADERS
+#   - RESPONSE_HEADERS
+
 cat "$tmpfile"
 
 printf "\nImporting the authz extension definition...\n"

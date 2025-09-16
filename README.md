@@ -1,7 +1,7 @@
 ## Service Extension for External Authorization check
 
 This is a Service Extension implemented in Java, applied to an external load
-balancer, to allow or deny access to a Cloud Run service, based on The contents
+balancer, to allow or deny access to a Cloud Run service, based on the contents
 of the Authorization header passed in the request.
 
 ## Disclaimer
@@ -53,7 +53,6 @@ The documentation for Service Extensions states:
 > Callouts run as general-purpose gRPC servers on user-managed compute VMs and
 > Google Kubernetes Engine Pods on Google Cloud, multicloud, or on-premises
 > environments.
-
 
 In this case, though, the authorization extension is loaded as a Cloud Run service.
 It doesn't require GKE or VMs or anything elaborate.
@@ -126,6 +125,10 @@ Restore the APIkey enforcement again with script 9a.
 - Why not just implement this in golang?
 
   Sure!  Have at it.  Go has good grpc support, and would work just fine.
+
+- or python?!
+
+  Sure!  Python too. It also has good grpc support, and would work just fine.
 
 
 ## Other Resources
